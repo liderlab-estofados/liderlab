@@ -1,0 +1,35 @@
+/* No seu arquivo config-styles.css */
+
+/* Aumenta a prioridade para o contêiner principal */
+body .floating-module-config {
+    background-color: #ffffff !important; /* Exemplo: Força o fundo branco */
+    border: 1px solid #007bff !important; /* Borda forte para teste */
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3); 
+    /* Remova a largura fixada se for criar um componente reutilizável */
+    width: 320px; 
+}
+
+/* Torna o título mais específico */
+body .floating-module-config h6 {
+    color: #007bff; 
+    font-size: 1.2rem;
+}
+
+/* Garante que os campos recebam o estilo desejado */
+body .form-control-sm,
+body .form-select-sm {
+    border-radius: 4px !important; /* Sobrescreve o arredondamento do Bootstrap */
+    border: 1px solid #ced4da;
+    box-shadow: none !important; /* Remove sombras ou focos padronizados do Bootstrap */
+}
+
+/* Botões: use !important apenas se o :hover ou o estado padrão não estiver funcionando */
+body #apply-config {
+    background-color: #007bff !important;
+    border-color: #007bff !important;
+}
+
+body #close-config {
+    background-color: #6c757d !important;
+    border-color: #6c757d !important;
+}

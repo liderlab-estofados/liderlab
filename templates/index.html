@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom CSS -->
     <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet">
-    
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
@@ -33,11 +33,11 @@
             <div class="col-12 col-lg-3 sidebar-container">
                 <div class="sidebar h-100 d-flex flex-column">
                     <!-- Header -->
-                    <div class="sidebar-header p-3 border-bottom">
+                    <div class="sidebar-header p-3">
                         <div class="d-flex align-items-center justify-content-between mb-3">
                             <div class="d-flex align-items-center">
-                                <img src="{{ url_for('static', filename='images/logo_lider.png') }}" alt="Lider Logo"
-                                    class="me-2" style="height: 32px;">
+                                <img src="{{ url_for('static', filename='images/LOGO lIDER LAB.png') }}"
+                                    alt="Lider Logo" class="me-2" style="height: 32px;">
                                 <h5 class="mb-0 fw-bold" style="font-size: 32px;"></h5>
                             </div>
                             <button class="btn btn-outline-secondary btn-sm d-lg-none" id="closeSidebar">
@@ -57,8 +57,16 @@
                         </div>
                     </div>
 
-                    <!-- Navigation Tabs -->
-                    <div class="sidebar-tabs">
+                    <!-- Back Button (initially hidden) - replaces the tab buttons -->
+                    <div id="backButtonContainer" class="back-button-container d-none">
+                        <button id="backToModelsBtn" class="btn btn-back w-100">
+                            <i class="fas fa-arrow-left me-2"></i>
+                            <span id="selectedModelName"></span>
+                        </button>
+                    </div>
+
+                    <!-- Navigation Tabs (hidden visually but functional) -->
+                    <div class="sidebar-tabs" style="display: none;">
                         <nav class="nav nav-pills nav-fill">
                             <button class="nav-link active" id="modelsTab" data-bs-toggle="pill"
                                 data-bs-target="#modelsPane">
@@ -68,10 +76,12 @@
                                 data-bs-target="#modulesPane">
                                 <i class="fas fa-puzzle-piece me-1"></i> Módulos
                             </button>
-                            <button class="nav-link" id="projectsTab" data-bs-toggle="pill"
+                            <<<<<<< HEAD <!-- <button class="nav-link" id="projectsTab" data-bs-toggle="pill"
                                 data-bs-target="#projectsPane">
                                 <i class="fas fa-folder me-1"></i> Projetos
-                            </button>
+                                </button> -->
+                                =======
+                                >>>>>>> mobile
                         </nav>
                     </div>
 
@@ -91,14 +101,15 @@
                         </div>
 
                         <!-- Modules Tab -->
-                        <div class="tab-pane fade h-100" id="modulesPane" overflow="hidden">
-                            <div class="p-3 h-100 overflow-auto">
+                        <div class="tab-pane fade h-100" id="modulesPane">
+                            <div class="d-flex flex-column h-100 p-3" style="box-sizing: border-box; min-height: 0;">
                                 <div class="alert alert-info text-center" id="noModelSelected">
                                     <i class="fas fa-info-circle mb-2"></i>
                                     <p class="mb-0">Selecione um modelo na aba "Modelos" para ver os módulos
                                         disponíveis.</p>
                                 </div>
-                                <div id="modulesContainer" class="modules-container d-none" overflow="hidden"></div>
+                                <div id="modulesContainer" class="modules-container d-none flex-grow-1 overflow-auto"
+                                    style="min-height: 0;"></div>
                             </div>
                         </div>
 
@@ -121,8 +132,8 @@
             <!-- Main Workspace -->
             <div class="col-12 col-lg-9 workspace-container">
                 <div class="workspace h-100 d-flex flex-column">
-                    <!-- Toolbar -->
-                    <div class="toolbar border-bottom p-2">
+                    <!-- Toolbar (Hidden - replaced by vertical toolbar) -->
+                    <div class="toolbar border-bottom p-2 d-none">
                         <div class="d-flex align-items-center justify-content-between">
                             <div class="d-flex align-items-center">
                                 <button class="btn btn-outline-secondary btn-sm me-2 d-lg-none" id="openSidebar">
@@ -134,9 +145,9 @@
                                     <button class="btn btn-outline-secondary btn-sm" id="zoomOut">
                                         <i class="fas fa-search-minus"></i>
                                     </button>
-                                    <button class="btn btn-outline-secondary btn-sm" id="zoomReset">
+                                    <!-- <button class="btn btn-outline-secondary btn-sm" id="zoomReset">
                                         <span id="zoomLevel">100%</span>
-                                    </button>
+                                    </button> -->
                                     <button class="btn btn-outline-secondary btn-sm" id="zoomIn">
                                         <i class="fas fa-search-plus"></i>
                                     </button>
@@ -184,16 +195,59 @@
                         </div>
                     </div>
 
-                    <!-- Canvas Area -->
-                    <div class="canvas-container flex-grow-1 position-relative overflow-auto" id="canvasContainer">
-                        <div class="canvas-workspace" id="canvasWorkspace">
-                            <div class="canvas-sheet" id="canvasSheet">
-                                <!-- Placed modules will be added aqui -->
+                    <!-- Canvas Area with Vertical Toolbar -->
+                    <div class="canvas-wrapper d-flex flex-grow-1 position-relative">
+                        <!-- Vertical Toolbar (Left side of canvas) -->
+                        <div class="vertical-toolbar" id="verticalToolbar">
+                            <button class="v-toolbar-btn sidebar-toggle" id="toggleSidebarV"
+                                title="Mostrar/ocultar barra lateral">
+                                <i class="fas fa-bars"></i>
+                            </button>
+                            <div class="v-toolbar-divider" id="toggleSidebarV">
                             </div>
-                            <canvas id="overlayCanvas"
-                                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
+                            <button class="v-toolbar-btn" id="zoomInV" title="Aumentar zoom">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                            <div class="v-toolbar-divider"></div>
+                            <button class="v-toolbar-btn" id="zoomReset">
+                                <i class="fas fa-magnifying-glass"></i>
+                                <span id="zoomLevel">100%</span>
+                            </button>
+                            <div class="v-toolbar-divider"></div>
+                            <button class="v-toolbar-btn" id="zoomOutV" title="Diminuir zoom">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <div class="v-toolbar-divider"></div>
+                            <button class="v-toolbar-btn" id="frameCanvasV" title="Enquadrar elementos">
+                                <i class="fas fa-expand"></i>
+                            </button>
+                            <div class="v-toolbar-divider"></div>
+                            <button class="v-toolbar-btn" id="gridToggleV" title="Mostrar/ocultar grid">
+                                <i class="fas fa-border-all"></i>
+                            </button>
+                            <div class="v-toolbar-divider"></div>
+                            <button class="v-toolbar-btn" id="clearCanvasV" title="Limpar canvas">
+                                <i class="fas fa-trash-can"></i>
+                            </button>
+                            <div class="v-toolbar-divider"></div>
+                            <button class="v-toolbar-btn" id="infoBtn" title="Ajuda e atalhos">
+                                <i class="fas fa-info"></i>
+                            </button>
+                            <div class="v-toolbar-divider"></div>
+                            <button class="v-toolbar-btn success" id="exportPDFV" title="Exportar PDF">
+                                <i class="fas fa-file-pdf"></i>
+                            </button>
+                        </div>
 
-                            <!-- Placed modules will be added here -->
+                        <!-- Canvas Container -->
+                        <div class="canvas-container flex-grow-1 position-relative overflow-auto" id="canvasContainer"
+                            style="display: flex; flex-direction: column;">
+                            <div class="canvas-workspace" id="canvasWorkspace" style="min-height: min-content;">
+                                <div class="canvas-sheet" id="canvasSheet">
+                                </div>
+                                <canvas id="overlayCanvas"
+                                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -216,32 +270,205 @@
     </div>
     </div>
 
-    <!-- Save Project Modal -->
-    <div class="modal fade" id="saveProjectModal" tabindex="-1">
-        <div class="modal-dialog">
+
+    <!-- Info Modal -->
+    <div class="modal fade" id="infoModal" tabindex="-1" aria-labelledby="infoModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="fas fa-save me-2"></i>Salvar Projeto
+                <div class="modal-header1 text-white">
+                    <h5 class="modal-title" id="infoModalLabel">
+                        <i class="fas fa-question-circle me-2"></i>Ajuda e Atalhos
                     </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="saveProjectForm">
-                        <div class="mb-3">
-                            <label for="projectName" class="form-label">Nome do Projeto</label>
-                            <input type="text" class="form-control" id="projectName" required>
+                    <!-- Toolbar Icons Section -->
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2 mb-3">
+                            <i class="fas fa-tools me-2"></i>Barra de Ferramentas
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="info-icon bg-light rounded p-2 me-3"><i class="fas fa-bars"></i></span>
+                                    <div>
+                                        <strong>Barra Lateral</strong>
+                                        <small class="d-block text-muted">Mostrar/ocultar painel lateral</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="info-icon bg-light rounded p-2 me-3"><i class="fas fa-plus"></i></span>
+                                    <div>
+                                        <strong>Aumentar Zoom</strong>
+                                        <small class="d-block text-muted">Ampliar visualização do canvas</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="info-icon bg-light rounded p-2 me-3"><i
+                                            class="fas fa-minus"></i></span>
+                                    <div>
+                                        <strong>Diminuir Zoom</strong>
+                                        <small class="d-block text-muted">Reduzir visualização do canvas</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="info-icon bg-light rounded p-2 me-3"><i
+                                            class="fas fa-magnifying-glass"></i></span>
+                                    <div>
+                                        <strong>Zoom 100%</strong>
+                                        <small class="d-block text-muted">Resetar zoom para tamanho original</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="info-icon bg-light rounded p-2 me-3"><i
+                                            class="fas fa-expand"></i></span>
+                                    <div>
+                                        <strong>Enquadrar</strong>
+                                        <small class="d-block text-muted">Ajustar visualização para caber todos os
+                                            módulos</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="info-icon bg-light rounded p-2 me-3"><i
+                                            class="fas fa-border-all"></i></span>
+                                    <div>
+                                        <strong>Grid</strong>
+                                        <small class="d-block text-muted">Mostrar/ocultar grade de referência</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="info-icon bg-light rounded p-2 me-3"><i
+                                            class="fas fa-trash-can"></i></span>
+                                    <div>
+                                        <strong>Limpar Canvas</strong>
+                                        <small class="d-block text-muted">Remover todos os módulos do canvas</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="info-icon bg-light rounded p-2 me-3"><i
+                                            class="fas fa-file-pdf"></i></span>
+                                    <div>
+                                        <strong>Exportar PDF</strong>
+                                        <small class="d-block text-muted">Gerar PDF com layout e lista de
+                                            módulos</small>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="projectDescription" class="form-label">Descrição (opcional)</label>
-                            <textarea class="form-control" id="projectDescription" rows="3"></textarea>
+                    </div>
+
+                    <!-- Module Controls Section -->
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2 mb-3">
+                            <i class="fas fa-mouse-pointer me-2"></i>Controles do Módulo (ao selecionar)
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="info-icon bg-light rounded p-2 me-3"><i
+                                            class="fas fa-rotate-left"></i></span>
+                                    <div>
+                                        <strong>Girar Esquerda</strong>
+                                        <small class="d-block text-muted">Rotacionar módulo 90° para esquerda</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="info-icon bg-light rounded p-2 me-3"><i
+                                            class="fas fa-rotate-right"></i></span>
+                                    <div>
+                                        <strong>Girar Direita</strong>
+                                        <small class="d-block text-muted">Rotacionar módulo 90° para direita</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="info-icon bg-light rounded p-2 me-3"><i
+                                            class="fas fa-arrows-alt-h"></i></span>
+                                    <div>
+                                        <strong>Espelhar Horizontal</strong>
+                                        <small class="d-block text-muted">Inverter módulo horizontalmente</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="info-icon bg-light rounded p-2 me-3"><i
+                                            class="fas fa-arrows-alt-v"></i></span>
+                                    <div>
+                                        <strong>Espelhar Vertical</strong>
+                                        <small class="d-block text-muted">Inverter módulo verticalmente</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="info-icon bg-light rounded p-2 me-3"><i class="fas fa-copy"></i></span>
+                                    <div>
+                                        <strong>Duplicar</strong>
+                                        <small class="d-block text-muted">Criar cópia do módulo</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="info-icon bg-light rounded p-2 me-3"><i class="fas fa-cog"></i></span>
+                                    <div>
+                                        <strong>Configurar</strong>
+                                        <small class="d-block text-muted">Alterar dimensões do módulo</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="info-icon bg-light rounded p-2 me-3"><i
+                                            class="fas fa-trash"></i></span>
+                                    <div>
+                                        <strong>Remover</strong>
+                                        <small class="d-block text-muted">Excluir módulo do canvas</small>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </form>
+                    </div>
+
+                    <!-- Keyboard Shortcuts Section -->
+                    <div>
+                        <h6 class="border-bottom pb-2 mb-3">
+                            <i class="fas fa-keyboard me-2"></i>Atalhos de Teclado
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center mb-2">
+                                    <kbd class="me-2" style="color: #000000;">Ctrl</kbd><span class="me-1"
+                                        style="color: #000000;">+</span><kbd class="me-3"
+                                        style="color: #000000;">+</kbd>
+                                    <span class="text-muted">Aumentar zoom</span>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <kbd class="me-2" style="color: #000000;">Ctrl</kbd><span class="me-1"
+                                        style="color: #000000;">+</span><kbd class="me-3"
+                                        style="color: #000000;">-</kbd>
+                                    <span class="text-muted">Diminuir zoom</span>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <kbd class="me-2" style="color: #000000;">Ctrl</kbd><span class="me-1"
+                                        style="color: #000000;">+</span><kbd class="me-3"
+                                        style="color: #000000;">0</kbd>
+                                    <span class="text-muted">Resetar zoom</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center mb-2">
+                                    <kbd class="me-2" style="color: #000000;">Delete</kbd>
+                                    <span class="text-muted">Remover módulo selecionado</span>
+                                </div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <kbd class="me-2" style="color: #000000;">Scroll</kbd>
+                                    <span class="text-muted">Zoom com roda do mouse</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" id="confirmSaveProject">
-                        <i class="fas fa-save me-1"></i>Salvar
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                        <i class="fas fa-check me-1"></i>Entendi
                     </button>
                 </div>
             </div>
@@ -258,15 +485,65 @@
 
 
     <script>
-        window.addEventListener('load', () => {
+        // Função para centralizar o canvas - tenta várias vezes para garantir
+        function centerCanvas() {
             const container = document.getElementById('canvasContainer');
-            if (container) {
-                // Centraliza horizontalmente
-                container.scrollLeft = (container.scrollWidth - container.clientWidth) / 2;
-                // Centraliza verticalmente
-                container.scrollTop = (container.scrollHeight - container.clientHeight) / 2;
+            const canvasSheet = document.getElementById('canvasSheet');
+
+            if (container && canvasSheet) {
+                // Garante que o container tenha scroll
+                container.style.overflow = 'auto';
+
+                // Forçar o container a ter a altura correta
+                const parent = container.parentElement;
+                if (parent) {
+                    const rect = parent.getBoundingClientRect();
+                    // Usa a altura do parent menos a toolbar vertical
+                    container.style.height = (rect.height - 20) + 'px'; // -20 para a toolbar vertical
+                    container.style.minHeight = '0';
+                }
+
+                // Espera o próximo frame para o DOM atualizar
+                requestAnimationFrame(() => {
+                    // Usa scrollWidth/scrollHeight do container (considera todo o conteúdo)
+                    const scrollWidth = container.scrollWidth;
+                    const scrollHeight = container.scrollHeight;
+                    const clientWidth = container.clientWidth;
+                    const clientHeight = container.clientHeight;
+
+                    // console.log('Canvas debug:', { scrollWidth, scrollHeight, clientWidth, clientHeight });
+
+                    // Calcula posição central
+                    let scrollLeft = Math.max(0, (scrollWidth - clientWidth) / 2);
+                    let scrollTop = Math.max(0, (scrollHeight - clientHeight) / 2);
+
+                    // Aplica o scroll
+                    container.scrollLeft = scrollLeft;
+                    container.scrollTop = scrollTop;
+
+                    // console.log('Centralizado:', { scrollLeft, scrollTop });
+                });
             }
-        });
+        }
+
+        // Executa em múltiplos momentos para garantir que funcione
+        function tryCenterCanvas() {
+            centerCanvas();
+            setTimeout(centerCanvas, 50);
+            setTimeout(centerCanvas, 100);
+            setTimeout(centerCanvas, 200);
+            setTimeout(centerCanvas, 500);
+            setTimeout(centerCanvas, 1000);
+        }
+
+        // Escuta múltiplos eventos
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', tryCenterCanvas);
+        } else {
+            tryCenterCanvas();
+        }
+
+        window.addEventListener('load', tryCenterCanvas);
     </script>
 
 </body>

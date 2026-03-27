@@ -4,6 +4,7 @@ class SofaDesigner {
         this.currentModel = null;
         this.modules = [];
         this.projects = [];
+        this.originalModels = {};
         this.searchTimeout = null;
         this.zoomLevel = 1;
         this.gridVisible = false;
@@ -23,10 +24,7 @@ class SofaDesigner {
     init() {
         this.setupEventListeners();
         this.loadModels();
-        this.loadProjects();
         this.initializeTooltips();
-
-
     }
 
     /**
@@ -63,6 +61,16 @@ class SofaDesigner {
                     this.performSearch(e.target.value);
                 }, 300);
             });
+
+            // Clear filter when search field is cleared
+            searchInput.addEventListener('change', (e) => {
+                if (!e.target.value.trim()) {
+                    // Reset to show all models immediately
+                    if (this.originalModels) {
+                        this.renderModels(this.originalModels);
+                    }
+                }
+            });
         }
 
         // Single document click listener for search (consolidated from duplicate)
@@ -79,19 +87,29 @@ class SofaDesigner {
         this.addEventListenerSafe('zoomIn', 'click', () => this.zoomIn());
         this.addEventListenerSafe('zoomOut', 'click', () => this.zoomOut());
 
+        // Vertical Toolbar - new buttons on the left side
+        this.addEventListenerSafe('toggleSidebarV', 'click', () => {
+            if (sidebarContainer) sidebarContainer.classList.toggle('show');
+        });
+        this.addEventListenerSafe('zoomInV', 'click', () => this.zoomIn());
+        this.addEventListenerSafe('zoomOutV', 'click', () => this.zoomOut());
+        this.addEventListenerSafe('gridToggleV', 'click', () => this.toggleGrid());
+        this.addEventListenerSafe('clearCanvasV', 'click', () => this.clearCanvas());
+        this.addEventListenerSafe('exportPDFV', 'click', () => this.exportAsPDF());
+        this.addEventListenerSafe('frameCanvasV', 'click', () => this.frameCanvas());
+
         // Canvas controls - removed duplicate undo listener
         this.addEventListenerSafe('undoBtn', 'click', () => this.undo());
         this.addEventListenerSafe('redoBtn', 'click', () => this.redo());
         this.addEventListenerSafe('clearCanvas', 'click', () => this.clearCanvas()); this.updateModuleCount();
         this.addEventListenerSafe('gridToggle', 'click', () => this.toggleGrid());
 
+        // Info modal
+        this.addEventListenerSafe('infoBtn', 'click', () => this.showInfoModal());
+
         // Export functions
         this.addEventListenerSafe('exportJSON', 'click', () => this.exportAsJSON());
         this.addEventListenerSafe('exportPDF', 'click', () => this.exportAsPDF());
-
-        // Project management
-        this.addEventListenerSafe('saveProjectBtn', 'click', () => this.showSaveProjectModal());
-        this.addEventListenerSafe('confirmSaveProject', 'click', () => this.saveProject());
 
         // Tab switching
         document.getElementById('modulesTab').addEventListener('click', () => {
@@ -101,6 +119,9 @@ class SofaDesigner {
                 return false;
             }
         });
+
+        // Back button
+        this.addEventListenerSafe('backToModelsBtn', 'click', () => this.goBackToModels());
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
@@ -113,10 +134,6 @@ class SofaDesigner {
                         } else {
                             this.undo();
                         }
-                        break;
-                    case 's':
-                        e.preventDefault();
-                        this.showSaveProjectModal();
                         break;
                     case '+':
                     case '=':
@@ -145,17 +162,23 @@ class SofaDesigner {
     async loadModels() {
         this.showLoading(true);
         try {
+            // console.log('Fetching models from API...');
             const response = await fetch('/api/models');
+            // console.log('API response status:', response.status);
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const modelsByCategory = await response.json();
+            // console.log('Models loaded:', modelsByCategory);
+            // Store original (unfiltered) models only on initial load
+            this.originalModels = JSON.parse(JSON.stringify(modelsByCategory));
+            // console.log('originalModels stored:', this.originalModels);
             this.renderModels(modelsByCategory);
         } catch (error) {
             console.error('Error loading models:', error);
-            this.showToast('Erro ao carregar modelos', 'error');
+            this.showToast('Erro ao carregar modelos: ' + error.message, 'error');
 
             // Provide fallback empty state
             this.renderModels({});
@@ -170,12 +193,12 @@ class SofaDesigner {
 
         Object.entries(modelsByCategory).forEach(([category, models]) => {
             const categoryDiv = document.createElement('div');
-            categoryDiv.className = 'model-category fade-in';
+            // categoryDiv.className = 'model-category fade-in';
 
-            const categoryTitle = document.createElement('div');
-            categoryTitle.className = 'model-category-title';
-            categoryTitle.textContent = category;
-            categoryDiv.appendChild(categoryTitle);
+            // const categoryTitle = document.createElement('div');
+            // categoryTitle.className = 'model-category-title';
+            // categoryTitle.textContent = category;
+            // categoryDiv.appendChild(categoryTitle);
 
             models.forEach(model => {
                 const modelItem = document.createElement('div');
@@ -202,11 +225,51 @@ class SofaDesigner {
 
         this.currentModel = modelo;
 
-        // Switch to modules tab and load modules
+        // Hide search container when model is selected
+        const searchContainer = document.querySelector('.search-container');
+        if (searchContainer) {
+            searchContainer.classList.add('d-none');
+        }
+
+        // Show back button and update model name
+        const backButtonContainer = document.getElementById('backButtonContainer');
+        const selectedModelName = document.getElementById('selectedModelName');
+        selectedModelName.textContent = modelo;
+        backButtonContainer.classList.remove('d-none');
+
+        // Switch to modules tab using Bootstrap
         document.getElementById('modulesTab').click();
+
+        // Load modules
         await this.loadModules(modelo);
 
         this.updateStatusMessage(`Modelo "${modelo}" selecionado`);
+    }
+
+    /**
+     * Go back to models view
+     */
+    goBackToModels() {
+        // Clear current model
+        this.currentModel = null;
+
+        // Hide back button
+        const backButtonContainer = document.getElementById('backButtonContainer');
+        backButtonContainer.classList.add('d-none');
+
+        // Show search container again when returning to model selection
+        const searchContainer = document.querySelector('.search-container');
+        if (searchContainer) {
+            searchContainer.classList.remove('d-none');
+        }
+
+        // Switch to models tab using Bootstrap
+        document.getElementById('modelsTab').click();
+
+        // Remove active class from model items
+        document.querySelectorAll('.model-item').forEach(item => item.classList.remove('active'));
+
+        this.updateStatusMessage('Selecione um modelo para começar');
     }
 
     /**
@@ -266,7 +329,6 @@ class SofaDesigner {
             groupWrapper.style.marginBottom = '1rem';
             groupWrapper.style.border = '1px solid #ccc';
             groupWrapper.style.borderRadius = '4px';
-            groupWrapper.style.overflow = 'hidden';
             groupWrapper.style.width = 'auto'; // ajuste conforme desejar
 
             // Caixa resumo (fechada)
@@ -361,12 +423,16 @@ class SofaDesigner {
                     if (touchData && touchData.pointerId === e.pointerId) {
                         const canvas = document.getElementById('canvasSheet');
                         const rect = canvas.getBoundingClientRect();
-                        const x = (e.clientX - rect.left) / sofaDesigner.zoomLevel;
-                        const y = (e.clientY - rect.top) / sofaDesigner.zoomLevel;
 
                         // Verifica se o drop foi dentro do canvas
                         if (e.clientX >= rect.left && e.clientX <= rect.right &&
                             e.clientY >= rect.top && e.clientY <= rect.bottom) {
+
+                            // Calcula a posição real onde o usuário soltou o touch
+                            // Considera o zoom level atual (igual ao drag/drop do desktop)
+                            const x = (e.clientX - rect.left) / sofaDesigner.zoomLevel;
+                            const y = (e.clientY - rect.top) / sofaDesigner.zoomLevel;
+
                             canvasManager.createPlacedModule(touchData.moduleData, x, y);
                         }
 
@@ -385,8 +451,8 @@ class SofaDesigner {
             // Estado de expansão para mobile
             let isExpandedByTouch = false;
             const isTouchDevice = (('ontouchstart' in window) ||
-                                   (navigator.maxTouchPoints > 0) ||
-                                   (navigator.msMaxTouchPoints > 0));
+                (navigator.maxTouchPoints > 0) ||
+                (navigator.msMaxTouchPoints > 0));
 
             if (!isTouchDevice) {
                 // Desktop: usar mouseenter/mouseleave
@@ -416,7 +482,7 @@ class SofaDesigner {
                 // Mobile: usar click para toggle
                 summaryBox.addEventListener('click', (e) => {
                     e.preventDefault();
-                    
+
                     if (!isExpandedByTouch) {
                         // Expandir
                         isExpandedByTouch = true;
@@ -476,6 +542,36 @@ class SofaDesigner {
         searchResults.style.display = 'block';
     }
 
+    performSearch(query) {
+        const searchInput = document.getElementById('searchInput');
+        const searchResults = document.getElementById('searchResults');
+
+        if (!query.trim()) {
+            // If search is empty, show all models
+            if (this.originalModels) {
+                this.renderModels(this.originalModels);
+            }
+            searchResults.style.display = 'none';
+            return;
+        }
+
+        // Filter models by name (case-insensitive) from ORIGINAL unfiltered data
+        const filteredModels = {};
+        const queryLower = query.toLowerCase();
+
+        Object.entries(this.originalModels || {}).forEach(([category, models]) => {
+            const filtered = models.filter(model =>
+                model.modelo.toLowerCase().includes(queryLower)
+            );
+            if (filtered.length > 0) {
+                filteredModels[category] = filtered;
+            }
+        });
+
+        // Re-render with filtered models
+        this.renderModels(filteredModels);
+    }
+
     selectModelFromSearch(modelo) {
         const modelElement = document.querySelector(`[data-modelo="${modelo}"]`);
         if (modelElement) {
@@ -508,6 +604,79 @@ class SofaDesigner {
 
         const label = document.getElementById('zoomLevel');
         if (label) label.textContent = `${Math.round(this.zoomLevel * 100)}%`;
+
+        // Also update vertical toolbar zoom display
+        const zoomLevelV = document.getElementById('zoomLevelV');
+        if (zoomLevelV) {
+            zoomLevelV.querySelector('span').textContent = `${Math.round(this.zoomLevel * 100)}%`;
+        }
+    }
+
+    /**
+     * Frame/fit all elements in the canvas view
+     * Calculates bounding box of all modules and adjusts zoom to fit them
+     */
+    frameCanvas() {
+        const modules = document.querySelectorAll('.placed-module');
+        const container = document.getElementById('canvasContainer');
+        const canvas = document.getElementById('canvasSheet');
+
+        if (modules.length === 0) {
+            this.showToast('Nenhum elemento para enquadrar', 'warning');
+            return;
+        }
+
+        // Calculate bounding box of all modules
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+        modules.forEach(m => {
+            const left = parseInt(m.style.left) || 0;
+            const top = parseInt(m.style.top) || 0;
+            const width = parseInt(m.style.width) || m.offsetWidth;
+            const height = parseInt(m.style.height) || m.offsetHeight;
+
+            minX = Math.min(minX, left);
+            minY = Math.min(minY, top);
+            maxX = Math.max(maxX, left + width);
+            maxY = Math.max(maxY, top + height);
+        });
+
+        // Add padding around the elements
+        const padding = 50;
+        const contentWidth = (maxX - minX) + (padding * 2);
+        const contentHeight = (maxY - minY) + (padding * 2);
+
+        // Get container dimensions (visible area)
+        const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
+
+        // Calculate zoom level to fit content in container
+        const zoomX = containerWidth / contentWidth;
+        const zoomY = containerHeight / contentHeight;
+
+        // Use the smaller zoom to ensure everything fits, with limits
+        let newZoom = Math.min(zoomX, zoomY);
+        newZoom = Math.max(newZoom, 0.2); // Minimum zoom
+        newZoom = Math.min(newZoom, 2); // Maximum zoom
+
+        // Apply the new zoom level
+        this.zoomLevel = newZoom;
+        this.applyZoom();
+
+        // Center the view on the content
+        requestAnimationFrame(() => {
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+
+            // Calculate scroll position to center the content
+            const scrollLeft = (centerX * this.zoomLevel) - (containerWidth / 2);
+            const scrollTop = (centerY * this.zoomLevel) - (containerHeight / 2);
+
+            container.scrollLeft = Math.max(0, scrollLeft);
+            container.scrollTop = Math.max(0, scrollTop);
+        });
+
+        this.showToast(`Enquadrado: ${Math.round(newZoom * 100)}%`, 'info');
     }
 
 
@@ -868,8 +1037,8 @@ class SofaDesigner {
                 [width, height] = [height, width];
             }
 
-            minX = Math.min(minX, x );
-            minY = Math.min(minY, y );
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
             maxX = Math.max(maxX, x + width);
             maxY = Math.max(maxY, y + height);
         });
@@ -1166,6 +1335,11 @@ class SofaDesigner {
 
     showSaveProjectModal() {
         const modal = new bootstrap.Modal(document.getElementById('saveProjectModal'));
+        modal.show();
+    }
+
+    showInfoModal() {
+        const modal = new bootstrap.Modal(document.getElementById('infoModal'));
         modal.show();
     }
 

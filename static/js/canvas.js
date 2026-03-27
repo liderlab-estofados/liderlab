@@ -170,6 +170,65 @@ class CanvasManager {
             if (label) label.textContent = `${Math.round(sofaDesigner.zoomLevel * 100)}%`;
         }, { passive: false });
 
+        // =====================================================
+        // PINCH-TO-ZOOM para mobile (dois dedos)
+        // =====================================================
+        let initialPinchDistance = 0;
+        let initialZoomLevel = 1;
+        let isPinching = false;
+
+        const getTouchDistance = (touch1, touch2) => {
+            const dx = touch1.clientX - touch2.clientX;
+            const dy = touch1.clientY - touch2.clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        };
+
+        // Detect when two fingers touch the screen
+        scrollContainer.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                isPinching = true;
+                initialPinchDistance = getTouchDistance(e.touches[0], e.touches[1]);
+                initialZoomLevel = sofaDesigner.zoomLevel;
+            }
+        }, { passive: false });
+
+        // Handle pinch movement
+        scrollContainer.addEventListener('touchmove', (e) => {
+            if (isPinching && e.touches.length === 2) {
+                e.preventDefault();
+
+                const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
+                const pinchRatio = currentDistance / initialPinchDistance;
+
+                // Calculate new zoom level
+                let newZoom = initialZoomLevel * pinchRatio;
+                newZoom = Math.min(3, Math.max(0.2, newZoom));
+
+                sofaDesigner.zoomLevel = newZoom;
+                canvas.style.transformOrigin = '0 0';
+                canvas.style.transform = `scale(${sofaDesigner.zoomLevel})`;
+
+                // Update zoom label
+                const label = document.getElementById('zoomLevel');
+                if (label) label.textContent = `${Math.round(sofaDesigner.zoomLevel * 100)}%`;
+
+                // Update vertical toolbar zoom display
+                const zoomLevelV = document.getElementById('zoomLevelV');
+                if (zoomLevelV) {
+                    zoomLevelV.querySelector('span').textContent = `${Math.round(sofaDesigner.zoomLevel * 100)}%`;
+                }
+            }
+        }, { passive: false });
+
+        // End pinch gesture
+        scrollContainer.addEventListener('touchend', (e) => {
+            if (isPinching && e.touches.length < 2) {
+                isPinching = false;
+            }
+        });
+        // =====================================================
+
 
         let isDragging = false;
         let dragStartX = 0;
@@ -226,6 +285,8 @@ class CanvasManager {
     }
 
     createPlacedModule(moduleData, x, y, saveState = true, opts = {}) {
+        const ignoreCollision = opts.ignoreCollision ?? false;
+
         if (saveState) {
             sofaDesigner.saveState();
         }
@@ -234,8 +295,21 @@ class CanvasManager {
         const { width, height } = this.getModuleDimensions(moduleData);
         const angle = opts.rotation ?? 0;
 
-        const adjustedX = Math.max(0, Math.min(x - width / 2, canvas.clientWidth - width));
-        const adjustedY = Math.max(0, Math.min(y - height / 2, canvas.clientHeight - height));
+        // Se opts.positionMode for 'corner', usa x e y diretamente como posição do canto
+        // Caso contrário, treat as center coordinates (original behavior)
+        let targetLeft, targetTop;
+
+        if (opts.positionMode === 'corner') {
+            // Usar coordenadas diretamente (para substituições de módulo na mesma posição)
+            targetLeft = x;
+            targetTop = y;
+        } else {
+            // Original: treat x,y as center
+            const adjustedX = Math.max(0, Math.min(x - width / 2, canvas.clientWidth - width));
+            const adjustedY = Math.max(0, Math.min(y - height / 2, canvas.clientHeight - height));
+            targetLeft = adjustedX;
+            targetTop = adjustedY;
+        }
 
         // Direção baseada no ângulo (similar ao duplicateModule)
         let dx = 0, dy = 0;
@@ -246,24 +320,22 @@ class CanvasManager {
         else if (angNorm === 270) { dx = 0; dy = -height; } // cima
         else { dx = width; } // default para direita
 
-        // Tenta posição inicial
-        let targetLeft = adjustedX;
-        let targetTop = adjustedY;
+        // Se colisão na posição inicial, avança em "saltos" até achar espaço livre (só se não ignora colisão)
+        if (!ignoreCollision) {
+            while (this.hasCollision(null, targetLeft, targetTop, width, height)) {
+                targetLeft += dx;
+                targetTop += dy;
 
-        // Se colisão na posição inicial, avança em "saltos" até achar espaço livre
-        while (this.hasCollision(null, targetLeft, targetTop, width, height)) {
-            targetLeft += dx;
-            targetTop += dy;
-
-            // Limite do canvas → aborta
-            if (
-                targetLeft < 0 ||
-                targetTop < 0 ||
-                targetLeft > canvas.clientWidth - width ||
-                targetTop > canvas.clientHeight - height
-            ) {
-                sofaDesigner.showToast('Sem espaço livre para adicionar o módulo.', 'warning');
-                return null;
+                // Limite do canvas → aborta
+                if (
+                    targetLeft < 0 ||
+                    targetTop < 0 ||
+                    targetLeft > canvas.clientWidth - width ||
+                    targetTop > canvas.clientHeight - height
+                ) {
+                    sofaDesigner.showToast('Sem espaço livre para adicionar o módulo.', 'warning');
+                    return null;
+                }
             }
         }
 
@@ -374,33 +446,55 @@ class CanvasManager {
             // 9️⃣ Aplicar mudanças
             configWindow.querySelector('#apply-config').addEventListener('click', () => {
                 const selectedModulo = configWindow.querySelector('#modulo-select').value;
-                const selectedLargura = parseInt(configWindow.querySelector('#largura-select').value);
-                const selectedProfundidade = parseInt(configWindow.querySelector('#profundidade-select').value);
+                const selectedLargura = Number(configWindow.querySelector('#largura-select').value);
+                const selectedProfundidade = Number(configWindow.querySelector('#profundidade-select').value);
 
-                const matched = availableMeasures.find(m =>
-                    m.modulo === selectedModulo &&
-                    m.largura === selectedLargura &&
-                    m.profundidade === selectedProfundidade
-                );
+                // Usar verificação mais flexível com conversão de tipos
+                const matched = availableMeasures.find(m => {
+                    const matchModulo = String(m.modulo).trim() === selectedModulo.trim();
+                    const matchLargura = Number(m.largura) === selectedLargura;
+                    const matchProfundidade = Number(m.profundidade) === selectedProfundidade;
+                    return matchModulo && matchLargura && matchProfundidade;
+                });
 
                 if (!matched) {
                     alert('A combinação selecionada não é válida.');
                     return;
                 }
 
-                // Captura posição e estado atual
-                const rect = moduleElement.getBoundingClientRect();
-                const canvasRect = moduleElement.parentElement.getBoundingClientRect();
-                const centerX = rect.left - canvasRect.left + rect.width / 2;
-                const centerY = rect.top - canvasRect.top + rect.height / 2;
+                // Captura posição atual ANTES de modificar qualquer coisa
+                const currentLeft = parseFloat(moduleElement.style.left) || 0;
+                const currentTop = parseFloat(moduleElement.style.top) || 0;
+                const currentRotation = parseInt(moduleElement.dataset.rotation ?? 0);
+                const currentFlipX = parseInt(moduleElement.dataset.flipX ?? 1);
+                const currentFlipY = parseInt(moduleElement.dataset.flipY ?? 1);
 
-                const rotation = parseInt(moduleElement.dataset.rotation ?? 0);
-                const flipX = parseInt(moduleElement.dataset.flipX ?? 1);
-                const flipY = parseInt(moduleElement.dataset.flipY ?? 1);
+                // Atualiza os dados do módulo existente em vez de recriar
+                moduleElement.dataset.moduleData = JSON.stringify(matched);
+                moduleElement.dataset.moduleId = matched.id;
+                moduleElement.dataset.rotation = String(currentRotation);
+                moduleElement.dataset.flipX = String(currentFlipX);
+                moduleElement.dataset.flipY = String(currentFlipY);
 
-                // Remove e recria
-                moduleElement.remove();
-                this.createPlacedModule(matched, centerX, centerY, true, { rotation, flipX, flipY });
+                // Atualiza as dimensões visuais
+                const { width: newWidth, height: newHeight } = this.getModuleDimensions(matched);
+                moduleElement.style.width = newWidth + 'px';
+                moduleElement.style.height = newHeight + 'px';
+
+                // Atualiza a imagem
+                const img = moduleElement.querySelector('img');
+                if (img) {
+                    img.src = matched.image;
+                    img.alt = matched.modulo;
+                }
+
+                // Aplica transformações
+                this.applyTransforms(moduleElement);
+
+                sofaDesigner.updateModuleCount();
+                sofaDesigner.saveState();
+                sofaDesigner.showToast(`Módulo alterado para "${matched.modulo}"`, 'info');
+
                 closeConfig();
             });
 
@@ -625,7 +719,7 @@ class CanvasManager {
         // Dados do módulo
         const moduleData = JSON.parse(moduleElement.dataset.moduleData || '{}');
         const prevAngle = Number(moduleData.angulo) || 0;
-        console.log(moduleData);
+        // console.log(moduleData);
 
         // soma, normaliza e quantiza em múltiplos de 90°
         let angulo = prevAngle + degrees;
@@ -633,7 +727,7 @@ class CanvasManager {
         //O bloco abaixo foi comentado para melhor o visual da rotação
         //angulo = ((angulo % 360) + 360) % 360;
         angulo = Math.round(angulo / 90) * 90;
-        
+
 
         moduleData.angulo = angulo;
         moduleElement.dataset.moduleData = JSON.stringify(moduleData);

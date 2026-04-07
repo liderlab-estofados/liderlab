@@ -1007,36 +1007,23 @@ class SofaDesigner {
             return;
         }
 
-        // --- Salvar estado atual de zoom e pan ---
         const originalZoom = this.zoomLevel || 1;
         const originalPan = this.panOffset ? { ...this.panOffset } : { x: 0, y: 0 };
         const originalTransform = canvasEl.style.transform;
-        // -----------------------------------------
 
-        // Reset temporário do zoom para exportar
         this.zoomReset();
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        // Calcular área ocupada pelos módulos (considerando rotação)
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         modules.forEach(m => {
             const x = parseInt(m.style.left) || 0;
             const y = parseInt(m.style.top) || 0;
-
-            // Obter dimensões originais do módulo (sem rotação)
             const moduleData = JSON.parse(m.dataset.moduleData);
             const rotation = parseInt(m.dataset.rotation) || 0;
-
-            // Dimensões do módulo em pixels (1mm = 0.2px conforme pixelsPerMM)
             const pixelsPerMM = 0.2;
             let width = Math.round(moduleData.largura * pixelsPerMM);
             let height = Math.round(moduleData.profundidade * pixelsPerMM);
-
-            // Se rotacionado em 90 ou 270 graus, trocar largura e altura
-            if (rotation === 90 || rotation === 270) {
-                [width, height] = [height, width];
-            }
-
+            if (rotation === 90 || rotation === 270) [width, height] = [height, width];
             minX = Math.min(minX, x);
             minY = Math.min(minY, y);
             maxX = Math.max(maxX, x + width);
@@ -1045,66 +1032,42 @@ class SofaDesigner {
 
         const capWidth = maxX - minX;
         const capHeight = maxY - minY;
-        const padding = 0;
 
         try {
-            // Criar canvas nativo para renderizar a área dos módulos
+            // ── Canvas da imagem principal ──────────────────────────────────────
             const renderCanvas = document.createElement('canvas');
-            const scale = 5; // Qualidade da imagem
-            renderCanvas.width = (capWidth + padding * 2) * scale;
-            renderCanvas.height = (capHeight + padding * 2) * scale;
-
+            const scale = 5;
+            renderCanvas.width = capWidth * scale;
+            renderCanvas.height = capHeight * scale;
             const ctx = renderCanvas.getContext('2d');
             ctx.scale(scale, scale);
-
-            // Fundo branco
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, capWidth + padding * 2, capHeight + padding * 2);
+            ctx.fillRect(0, 0, capWidth, capHeight);
 
-            // Renderizar cada módulo no canvas
             for (const m of modules) {
                 const x = parseInt(m.style.left) || 0;
                 const y = parseInt(m.style.top) || 0;
                 const moduleData = JSON.parse(m.dataset.moduleData);
-                const rotation = parseInt(m.dataset.rotation) || 0;
+                const rotationRaw = parseInt(m.dataset.rotation) || 0;
+                const rotationNorm = ((rotationRaw % 360) + 360) % 360;
                 const flipX = parseInt(m.dataset.flipX) || 1;
                 const flipY = parseInt(m.dataset.flipY) || 1;
-
-                // Dimensões em pixels (mantém width/height originais para desenhar sem deformar)
                 const pixelsPerMM = 0.2;
                 const width = Math.round(moduleData.largura * pixelsPerMM);
                 const height = Math.round(moduleData.profundidade * pixelsPerMM);
+                let centerW = width, centerH = height;
+                if (rotationNorm === 90 || rotationNorm === 270) { centerW = height; centerH = width; }
+                const relX = x - minX;
+                const relY = y - minY;
 
-                // Normaliza rotação pra 0..359 e detecta 90/270
-                const rotationRaw = parseInt(m.dataset.rotation) || 0;
-                const rotationNorm = ((rotationRaw % 360) + 360) % 360; // evita negativos
-
-                // Calcula centro usado no translate — se 90/270, o "envelope" do módulo troca largura/altura
-                let centerW = width;
-                let centerH = height;
-                if (rotationNorm === 90 || rotationNorm === 270) {
-                    centerW = height;
-                    centerH = width;
-                }
-
-                // Posição relativa à área capturada (continua igual)
-                const relX = x - minX + padding;
-                const relY = y - minY + padding;
-
-                // Carregar e renderizar imagem
                 const img = new Image();
                 img.src = moduleData.image;
-
                 await new Promise(resolve => {
                     img.onload = () => {
                         ctx.save();
-                        // Usa centerW/centerH para posicionar o centro correto do envelope rotacionado
                         ctx.translate(relX + centerW / 2, relY + centerH / 2);
-                        // Aplica rotação real (em radianos)
                         ctx.rotate((rotationRaw * Math.PI) / 180);
-                        // Aplica flip/scale (mantendo a imagem sem deformação)
                         ctx.scale(flipX, flipY);
-                        // Desenha a imagem com width/height originais — sem trocar, pra não deformar
                         ctx.drawImage(img, -width / 2, -height / 2, width, height);
                         ctx.restore();
                         resolve();
@@ -1112,9 +1075,6 @@ class SofaDesigner {
                     img.onerror = () => { console.warn('Falha ao carregar imagem:', moduleData.image); resolve(); };
                 });
 
-
-
-                // Texto de dimensões
                 ctx.fillStyle = '#666666';
                 ctx.font = 'bold 12px Arial';
                 ctx.fillText(`${moduleData.largura}×${moduleData.profundidade}mm`, relX + 5, relY + 15);
@@ -1123,140 +1083,208 @@ class SofaDesigner {
 
             const imgData = renderCanvas.toDataURL('image/png');
 
-            // Criação do PDF
+            // ── Thumbnails dos módulos (para tabela) ────────────────────────────
+            const state = this.getCanvasState();
+            const thumbSize = 14; // mm no PDF
+
+            // Pre-renderiza thumbnails como base64
+            const thumbDataList = await Promise.all(state.modules.map(m => {
+                return new Promise(resolve => {
+                    const img = new Image();
+                    img.src = m.data.image;
+                    img.onload = () => {
+                        const tc = document.createElement('canvas');
+                        tc.width = 80; tc.height = 80;
+                        const tc2 = tc.getContext('2d');
+                        tc2.fillStyle = '#ffffff';
+                        tc2.fillRect(0, 0, 80, 80);
+                        tc2.drawImage(img, 0, 0, 80, 80);
+                        resolve(tc.toDataURL('image/png'));
+                    };
+                    img.onerror = () => resolve(null);
+                });
+            }));
+
+            // ── Criação do PDF ──────────────────────────────────────────────────
             const pdf = new jspdf.jsPDF('p', 'mm', 'a4');
-            const pageWidth = pdf.internal.pageSize.getWidth();
-            const pageHeight = pdf.internal.pageSize.getHeight();
+            const pageWidth = pdf.internal.pageSize.getWidth();   // 210
+            const pageHeight = pdf.internal.pageSize.getHeight();  // 297
+            const mL = 15, mR = 15, mT = 15, mB = 15;
+            const contentW = pageWidth - mL - mR;
 
-            // Margens e dimensões úteis
-            const marginLeft = 15;
-            const marginRight = 15;
-            const marginTop = 25;
-            const marginBottom = 20;
-            const contentWidth = pageWidth - marginLeft - marginRight;
-
-            // Fundo branco da página
+            // Fundo branco
             pdf.setFillColor(255, 255, 255);
-            pdf.rect(0, 0, pageWidth, pageHeight, "F");
+            pdf.rect(0, 0, pageWidth, pageHeight, 'F');
 
-            // Cabeçalho
-            pdf.setDrawColor(100, 100, 100);
-            pdf.setLineWidth(0.5);
-            pdf.line(marginLeft, marginTop, pageWidth - marginRight, marginTop);
-            pdf.setFontSize(16);
-            pdf.setTextColor(60, 60, 60);
-            pdf.setFont("helvetica", "normal");
-            pdf.text("Layout de Sofá", pageWidth / 2, marginTop - 8, { align: 'center' });
-
-            // Logo (opcional)
+            // ── Logo ────────────────────────────────────────────────────────────
+            let cursorY = mT;
             try {
-                const logoData = await this.getBase64ImageFromURL('static/images/logo_lider.png');
-                pdf.addImage(logoData, 'PNG', marginLeft, marginTop - 12, 24, 8);
+                const logoData = await this.getBase64ImageFromURL('static/images/LOGO lIDER LAB.png');
+                pdf.addImage(logoData, 'PNG', mL, cursorY, 65, 10);
             } catch (e) {
-                console.log('Logo não carregada:', e);
+                // Fallback: texto como logo
+                pdf.setFontSize(22);
+                pdf.setFont('helvetica', 'bold');
+                pdf.setTextColor(0, 0, 0);
+                pdf.text('LIDERLAB', mL, cursorY + 12);
             }
+            cursorY += 24;
 
-            // Ajuste da imagem principal
-            const imgMaxWidth = contentWidth;
-            const imgMaxHeight = pageHeight - marginTop - marginBottom - 60;
-            const ratio = Math.min(imgMaxWidth / capWidth, imgMaxHeight / capHeight);
+            // ── Título "SOFÁ [MODELO]" ──────────────────────────────────────────
+            const modeloName = state.modules.length > 0 ? (state.modules[0].data.modelo || '') : '';
+            const pageTitle = `SOFÁ ${modeloName}`.trim();
+            pdf.setFontSize(13);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setTextColor(30, 30, 30);
+            pdf.text(pageTitle, mL, cursorY);
+            cursorY += 8;
+
+            // ── Imagem principal ────────────────────────────────────────────────
+            const imgMaxW = contentW;
+            const imgMaxH = 100; // máx 100mm de altura para a imagem
+            const ratio = Math.min(imgMaxW / capWidth, imgMaxH / capHeight);
             const imgW = capWidth * ratio;
             const imgH = capHeight * ratio;
-            const imgX = marginLeft + (contentWidth - imgW) / 2;
-            const imgY = marginTop + 10;
+            const imgX = mL + (contentW - imgW) / 2;
 
-            pdf.addImage(imgData, "PNG", imgX, imgY, imgW, imgH);
+            pdf.addImage(imgData, 'PNG', imgX, cursorY, imgW, imgH);
+            cursorY += imgH + 10;
 
-            // Quadro de listagem
-            const listY = imgY + imgH + 15;
-            pdf.setDrawColor(200, 200, 200);
-            pdf.setFillColor(248, 249, 250);
-            pdf.roundedRect(marginLeft, listY, contentWidth, pageHeight - listY - marginBottom, 2, 2, 'F');
-            pdf.roundedRect(marginLeft, listY, contentWidth, pageHeight - listY - marginBottom, 2, 2, 'S');
+            // ── Cabeçalho da lista ──────────────────────────────────────────────
+            pdf.setFontSize(11);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setTextColor(30, 30, 30);
+            pdf.text('Lista de módulos', mL, cursorY);
+            cursorY += 3;
 
-            // Cabeçalho da tabela
-            pdf.setFontSize(12);
-            pdf.setTextColor(60, 60, 60);
-            pdf.setFont(undefined, 'bold');
-            pdf.text("LISTA DE MÓDULOS", marginLeft + 10, listY + 8);
-            pdf.line(marginLeft + 10, listY + 11, marginLeft + contentWidth - 10, listY + 11);
+            // Linha separadora abaixo do título
+            pdf.setDrawColor(180, 180, 180);
+            pdf.setLineWidth(0.4);
+            pdf.line(mL, cursorY, mL + contentW, cursorY);
+            cursorY += 5;
 
-            // Conteúdo da listagem
-            pdf.setFontSize(10);
-            pdf.setTextColor(80, 80, 80);
-            pdf.setFont(undefined, 'normal');
+            // ── Cabeçalho da tabela ─────────────────────────────────────────────
+            const colNum = mL;
+            const colModelo = mL + 14;
+            const colModulo = mL + 44;
+            const colMedida = mL + 74;
+            const colCPL = mL + 134;
+            const rowH = thumbSize + 4; // altura da linha com thumbnail
 
-            const state = this.getCanvasState();
-            let yPos = listY + 18;
-            const lineHeight = 6;
-            const col1 = marginLeft + 10;
-            const col2 = col1 + 30;
-            const col3 = col2 + 30;
-            const col4 = col3 + 30;
-            const col5 = col4 + 30;
+            pdf.setFontSize(9);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setTextColor(30, 30, 30);
+            pdf.text('#', colNum, cursorY);
+            pdf.text('Modelo', colModelo, cursorY);
+            pdf.text('Módulo', colModulo, cursorY);
+            pdf.text('Medidas (mm)', colMedida, cursorY);
+            pdf.text('CPL', colCPL, cursorY);
+            cursorY += 2;
 
-            pdf.setFont(undefined, 'bold');
-            pdf.text("#", col1, yPos);
-            pdf.text("Modelo", col2, yPos);
-            pdf.text("Módulo", col3, yPos);
-            pdf.text("Medidas (mm)", col4, yPos);
-            pdf.text("CPL", col5, yPos);
-            yPos += lineHeight + 2;
-            pdf.setDrawColor(220, 220, 220);
-            pdf.line(col1, yPos - 5, marginLeft + contentWidth - 10, yPos - 5);
+            pdf.setDrawColor(180, 180, 180);
+            pdf.setLineWidth(0.4);
+            pdf.line(mL, cursorY, mL + contentW, cursorY);
+            cursorY += 4;
 
-            pdf.setFont(undefined, 'normal');
+            // ── Linhas da tabela ────────────────────────────────────────────────
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(8.5);
+            pdf.setTextColor(50, 50, 50);
+
             state.modules.forEach((m, idx) => {
-                if (yPos > pageHeight - marginBottom - lineHeight) {
+                // Nova página se necessário
+                if (cursorY + rowH > pageHeight - mB) {
                     pdf.addPage();
-                    pdf.setFillColor(248, 249, 250);
-                    pdf.roundedRect(marginLeft, marginTop, contentWidth, pageHeight - marginTop - marginBottom, 2, 2, 'F');
-                    pdf.roundedRect(marginLeft, marginTop, contentWidth, pageHeight - marginTop - marginBottom, 2, 2, 'S');
-                    yPos = marginTop + 8;
-                    pdf.setFont(undefined, 'bold');
-                    pdf.text("#", col1, yPos);
-                    pdf.text("Modelo", col2, yPos);
-                    pdf.text("Módulo", col3, yPos);
-                    pdf.text("Medidas (mm)", col4, yPos);
-                    pdf.text("Cod. CPL", col5, yPos);
-                    yPos += lineHeight + 2;
-                    pdf.line(col1, yPos - 1, marginLeft + contentWidth - 10, yPos - 1);
+                    cursorY = mT;
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.setFontSize(9);
+                    pdf.text('#', colNum, cursorY);
+                    pdf.text('Modelo', colModelo, cursorY);
+                    pdf.text('Módulo', colModulo, cursorY);
+                    pdf.text('Medidas (mm)', colMedida, cursorY);
+                    pdf.text('CPL', colCPL, cursorY);
+                    cursorY += 2;
+                    pdf.setDrawColor(180, 180, 180);
+                    pdf.setLineWidth(0.4);
+                    pdf.line(mL, cursorY, mL + contentW, cursorY);
+                    cursorY += 4;
+                    pdf.setFont('helvetica', 'normal');
+                    pdf.setFontSize(8.5);
+                    pdf.setTextColor(50, 50, 50);
                 }
 
                 const { modelo, modulo, largura, profundidade, CPL } = m.data;
-                pdf.text(`${idx + 1}`, col1, yPos);
-                pdf.text(modelo || '-', col2, yPos);
-                pdf.text(modulo, col3, yPos);
-                pdf.text(`${largura} × ${profundidade}`, col4, yPos);
-                pdf.text(`${CPL}`, col5, yPos);
-                yPos += lineHeight;
+                const midY = cursorY + rowH / 2 + 1.5; // baseline vertical centrada
+
+                // Coluna #
+                pdf.text(`${idx + 1}`, colNum, midY);
+
+                // Coluna Modelo
+                pdf.text(modelo || '-', colModelo, midY);
+
+                // Coluna Módulo
+                pdf.text(String(modulo || '-'), colModulo, midY);
+
+                // Coluna Medidas: thumbnail + número do módulo + dimensões
+                const thumbX = colMedida;
+                const thumbY = cursorY;
+
+                if (thumbDataList[idx]) {
+                    pdf.addImage(thumbDataList[idx], 'PNG', thumbX, thumbY, thumbSize, thumbSize);
+                }
+
+                // Número do módulo (sobreposto ao thumb, canto superior esquerdo)
+                pdf.setFontSize(7);
+                pdf.setTextColor(255, 255, 255);
+                pdf.setFont('helvetica', 'bold');
+                pdf.text(String(modulo || ''), thumbX + 1, thumbY + 4.5);
+
+                // Dimensões ao lado do thumb
+                pdf.setFontSize(8);
+                pdf.setTextColor(50, 50, 50);
+                pdf.setFont('helvetica', 'normal');
+                const dimX = thumbX + thumbSize + 2;
+                pdf.text(`${largura} × ${profundidade} mm`, dimX, thumbY + thumbSize / 2 + 1.5);
+
+                // Coluna CPL
+                pdf.text(String(CPL ?? 'undefined'), colCPL, midY);
+
+                cursorY += rowH;
+
+                // Linha divisória entre linhas
+                pdf.setDrawColor(220, 220, 220);
+                pdf.setLineWidth(0.2);
+                pdf.line(mL, cursorY, mL + contentW, cursorY);
+                cursorY += 2;
+
+                // Reset cor/fonte para próxima linha
+                pdf.setFontSize(8.5);
+                pdf.setTextColor(50, 50, 50);
+                pdf.setFont('helvetica', 'normal');
             });
 
-            // Rodapé
-            pdf.setFontSize(8);
-            pdf.setTextColor(150, 150, 150);
+            // ── Rodapé ──────────────────────────────────────────────────────────
             const dateTime = new Date().toLocaleString('pt-BR');
-            pdf.text(`Gerado em: ${dateTime}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+            pdf.setFontSize(7.5);
+            pdf.setTextColor(160, 160, 160);
+            pdf.setFont('helvetica', 'normal');
+            pdf.text(`Gerado em: ${dateTime}`, pageWidth / 2, pageHeight - 8, { align: 'center' });
 
             pdf.save(`sofa-layout-${Date.now()}.pdf`);
             this.showToast('PDF exportado com sucesso', 'success');
+
         } catch (error) {
             console.error('Erro ao exportar PDF:', error);
             this.showToast('Erro ao exportar PDF', 'error');
         } finally {
-            // --- Restaurar zoom e pan do usuário ---
             if (typeof this.setZoom === 'function') this.setZoom(originalZoom);
             if (typeof this.setPan === 'function' && originalPan)
                 this.setPan(originalPan.x, originalPan.y);
-
-            // Se o controle for via CSS transform
-            if (originalTransform)
-                canvasEl.style.transform = originalTransform;
-            // --------------------------------------------
+            if (originalTransform) canvasEl.style.transform = originalTransform;
         }
     }
 
-    // Adicione este método para carregar imagens (se for usar logo)
+    // Manter este método inalterado
     getBase64ImageFromURL(url) {
         return new Promise((resolve, reject) => {
             const img = new Image();
@@ -1267,8 +1295,7 @@ class SofaDesigner {
                 canvas.height = img.naturalHeight;
                 canvas.width = img.naturalWidth;
                 ctx.drawImage(img, 0, 0);
-                const dataURL = canvas.toDataURL();
-                resolve(dataURL);
+                resolve(canvas.toDataURL());
             };
             img.onerror = error => reject(error);
             img.src = url;

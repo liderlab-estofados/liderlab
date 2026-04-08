@@ -1213,7 +1213,8 @@ class SofaDesigner {
                     pdf.setTextColor(50, 50, 50);
                 }
 
-                const { modelo, modulo, largura, profundidade, CPL } = m.data;
+                const { modelo, modulo, largura, profundidade } = m.data;
+                const CPL = m.data['cpl-mod']?.trim() || '-';
                 const midY = cursorY + rowH / 2 + 1.5; // baseline vertical centrada
 
                 // Coluna #

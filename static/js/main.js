@@ -1075,7 +1075,7 @@ class SofaDesigner {
                     img.onerror = () => { console.warn('Falha ao carregar imagem:', moduleData.image); resolve(); };
                 });
 
-                ctx.fillStyle = '#666666';
+                ctx.fillStyle = 'rgba(102, 102, 102, 0)';
                 ctx.font = 'bold 12px Arial';
                 ctx.fillText(`${moduleData.largura}×${moduleData.profundidade}mm`, relX + 5, relY + 15);
                 ctx.restore();

@@ -402,8 +402,10 @@ class CanvasManager {
             const configWindow = await this.loadHTMLTemplate('/static/html/module-config.html');
 
             // 4️⃣ Posicionar dinamicamente
-            configWindow.style.left = `${event.clientX + 100}px`;
-            configWindow.style.top = `${event.clientY}px`;
+            configWindow.style.left = '50%';
+            configWindow.style.top = '50%';
+            configWindow.style.transform = 'translate(-50%, -50%)';
+            configWindow.style.position = 'fixed';
 
             // 5️⃣ Preencher dados iniciais
             configWindow.querySelector('#modelo-field').value = moduleData.modelo || 'N/A';
@@ -423,10 +425,14 @@ class CanvasManager {
 
             configWindow.querySelector('#largura-select').innerHTML = getOptions(moduleData.modulo, 'largura');
             configWindow.querySelector('#profundidade-select').innerHTML = getOptions(moduleData.modulo, 'profundidade');
-            configWindow.querySelector('#opcional1-select').innerHTML = getOptions(moduleData.modulo, 'Opcional 1');
+            configWindow.querySelector('#opcional1-select').innerHTML = getOptions(moduleData.modulo, 'Opcional_1');
+            configWindow.querySelector('#opcional2-select').innerHTML = getOptions(moduleData.modulo, 'Opcional_2');
 
             // 6️⃣ Adicionar à página
             document.body.appendChild(configWindow);
+
+            // Make draggable
+            this.makeDraggable(configWindow);
 
             // 7️⃣ Fechar ao clicar fora
             const closeConfig = () => configWindow.remove();
@@ -440,7 +446,8 @@ class CanvasManager {
                 const selectedModulo = e.target.value;
                 configWindow.querySelector('#largura-select').innerHTML = getOptions(selectedModulo, 'largura');
                 configWindow.querySelector('#profundidade-select').innerHTML = getOptions(selectedModulo, 'profundidade');
-                configWindow.querySelector('#opcional1-select').innerHTML = getOptions(selectedModulo, 'Opcional 1');
+                configWindow.querySelector('#opcional1-select').innerHTML = getOptions(selectedModulo, 'Opcional_1');
+                configWindow.querySelector('#opcional2-select').innerHTML = getOptions(selectedModulo, 'Opcional_2');
             });
 
             // 9️⃣ Aplicar mudanças
@@ -511,6 +518,52 @@ class CanvasManager {
         const wrapper = document.createElement('div');
         wrapper.innerHTML = html.trim();
         return wrapper.firstElementChild;
+    }
+
+    makeDraggable(configWindow) {
+        const header = configWindow.querySelector('.draggable-header');
+        if (!header) {
+            console.warn('No draggable header found');
+            return;
+        }
+
+        let isDragging = false;
+        let startX, startY, startLeft, startTop;
+
+        const onPointerDown = (e) => {
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            startLeft = parseFloat(configWindow.style.left) || 0;
+            startTop = parseFloat(configWindow.style.top) || 0;
+            configWindow.style.cursor = 'grabbing';
+            configWindow.setPointerCapture(e.pointerId);
+        };
+
+        const onPointerMove = (e) => {
+            if (!isDragging) return;
+
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            let newLeft = startLeft + dx;
+            let newTop = startTop + dy;
+
+            // Constrain to viewport
+            newLeft = Math.max(5, Math.min(newLeft, window.innerWidth - configWindow.offsetWidth - 5));
+            newTop = Math.max(5, Math.min(newTop, window.innerHeight - configWindow.offsetHeight - 5));
+
+            configWindow.style.left = newLeft + 'px';
+            configWindow.style.top = newTop + 'px';
+        };
+
+        const onPointerUp = (e) => {
+            isDragging = false;
+            configWindow.style.cursor = 'move';
+        };
+
+        header.addEventListener('pointerdown', onPointerDown);
+        configWindow.addEventListener('pointermove', onPointerMove);
+        document.addEventListener('pointerup', onPointerUp);
     }
 
 

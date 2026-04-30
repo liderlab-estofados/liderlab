@@ -411,10 +411,16 @@ class CanvasManager {
             configWindow.querySelector('#modelo-field').value = moduleData.modelo || 'N/A';
 
             const uniqueModules = [...new Set(availableMeasures.map(m => m.modulo))].sort();
+
+            // Normaliza null/undefined para string vazia, evitando option value="null"
+            const norm = v => (v == null ? '' : String(v).trim());
+
             const getOptions = (modulo, campo) => {
                 const filtered = availableMeasures.filter(m => m.modulo === modulo);
-                const values = [...new Set(filtered.map(m => m[campo]))].sort((a, b) => a - b);
-                return values.map(v => `<option value="${v}" ${v === moduleData[campo] ? 'selected' : ''}>${v}</option>`).join('');
+                const values = [...new Set(filtered.map(m => norm(m[campo])))].sort((a, b) => a - b);
+                return values.map(v =>
+                    `<option value="${v}" ${v === norm(moduleData[campo]) ? 'selected' : ''}>${v || '-'}</option>`
+                ).join('');
             };
 
             // Preenche selects
@@ -441,27 +447,88 @@ class CanvasManager {
             });
             configWindow.querySelector('#close-config').addEventListener('click', closeConfig);
 
-            // 8️⃣ Atualizar selects quando o módulo muda
+            // 8️⃣ Cascata de selects
+            // Retorna options de `campo` filtrando `availableMeasures` pelos campos em `filters`
+            const getOptionsFor = (campo, filters = {}, currentVal = null) => {
+                const filtered = availableMeasures.filter(m => {
+                    if (filters.modulo != null && String(m.modulo).trim() !== filters.modulo) return false;
+                    if (filters.largura != null && Number(m.largura) !== filters.largura) return false;
+                    if (filters.profundidade != null && Number(m.profundidade) !== filters.profundidade) return false;
+                    if (filters.op1 != null && norm(m.Opcional_1) !== filters.op1) return false;
+                    if (filters.op2 != null && norm(m.Opcional_2) !== filters.op2) return false;
+                    return true;
+                });
+                const values = [...new Set(filtered.map(m => {
+                    if (campo === 'largura') return Number(m.largura);
+                    if (campo === 'profundidade') return Number(m.profundidade);
+                    return norm(m[campo]);
+                }))].sort((a, b) => a - b);
+                if (values.length === 0) return '<option value="">-</option>';
+                return values.map(v =>
+                    `<option value="${v}" ${String(v) === String(currentVal) ? 'selected' : ''}>${v || '-'}</option>`
+                ).join('');
+            };
+
+            // Quando qualquer campo muda, os demais são recarregados filtrados pelo novo valor
+            const reloadOthers = (changedField) => {
+                const mod = moduloSelect.value;
+                const larg = Number(configWindow.querySelector('#largura-select').value) || null;
+                const prof = Number(configWindow.querySelector('#profundidade-select').value) || null;
+                const op1 = configWindow.querySelector('#opcional1-select').value;
+                const op2 = configWindow.querySelector('#opcional2-select').value;
+
+                // Filtro base: modulo sempre presente + o campo que acabou de mudar
+                const base = { modulo: mod };
+                if (changedField === 'largura') base.largura = larg;
+                if (changedField === 'profundidade') base.profundidade = prof;
+                if (changedField === 'op1') base.op1 = op1;
+                if (changedField === 'op2') base.op2 = op2;
+
+                if (changedField !== 'largura')
+                    configWindow.querySelector('#largura-select').innerHTML =
+                        getOptionsFor('largura', base, larg);
+
+                if (changedField !== 'profundidade')
+                    configWindow.querySelector('#profundidade-select').innerHTML =
+                        getOptionsFor('profundidade', base, prof);
+
+                if (changedField !== 'op1')
+                    configWindow.querySelector('#opcional1-select').innerHTML =
+                        getOptionsFor('Opcional_1', base, op1);
+
+                if (changedField !== 'op2')
+                    configWindow.querySelector('#opcional2-select').innerHTML =
+                        getOptionsFor('Opcional_2', base, op2);
+            };
+
+            // modulo → recarrega tudo sem filtro adicional
             moduloSelect.addEventListener('change', (e) => {
-                const selectedModulo = e.target.value;
-                configWindow.querySelector('#largura-select').innerHTML = getOptions(selectedModulo, 'largura');
-                configWindow.querySelector('#profundidade-select').innerHTML = getOptions(selectedModulo, 'profundidade');
-                configWindow.querySelector('#opcional1-select').innerHTML = getOptions(selectedModulo, 'Opcional_1');
-                configWindow.querySelector('#opcional2-select').innerHTML = getOptions(selectedModulo, 'Opcional_2');
+                const mod = e.target.value;
+                configWindow.querySelector('#largura-select').innerHTML = getOptions(mod, 'largura');
+                configWindow.querySelector('#profundidade-select').innerHTML = getOptions(mod, 'profundidade');
+                configWindow.querySelector('#opcional1-select').innerHTML = getOptions(mod, 'Opcional_1');
+                configWindow.querySelector('#opcional2-select').innerHTML = getOptions(mod, 'Opcional_2');
             });
+
+            configWindow.querySelector('#largura-select').addEventListener('change', () => reloadOthers('largura'));
+            configWindow.querySelector('#profundidade-select').addEventListener('change', () => reloadOthers('profundidade'));
+            configWindow.querySelector('#opcional1-select').addEventListener('change', () => reloadOthers('op1'));
+            configWindow.querySelector('#opcional2-select').addEventListener('change', () => reloadOthers('op2'));
 
             // 9️⃣ Aplicar mudanças
             configWindow.querySelector('#apply-config').addEventListener('click', () => {
                 const selectedModulo = configWindow.querySelector('#modulo-select').value;
                 const selectedLargura = Number(configWindow.querySelector('#largura-select').value);
                 const selectedProfundidade = Number(configWindow.querySelector('#profundidade-select').value);
+                const selectedOpcional1 = configWindow.querySelector('#opcional1-select').value;
+                const selectedOpcional2 = configWindow.querySelector('#opcional2-select').value;
 
-                // Usar verificação mais flexível com conversão de tipos
                 const matched = availableMeasures.find(m => {
-                    const matchModulo = String(m.modulo).trim() === selectedModulo.trim();
-                    const matchLargura = Number(m.largura) === selectedLargura;
-                    const matchProfundidade = Number(m.profundidade) === selectedProfundidade;
-                    return matchModulo && matchLargura && matchProfundidade;
+                    return String(m.modulo).trim() === selectedModulo.trim()
+                        && Number(m.largura) === selectedLargura
+                        && Number(m.profundidade) === selectedProfundidade
+                        && norm(m.Opcional_1) === selectedOpcional1
+                        && norm(m.Opcional_2) === selectedOpcional2;
                 });
 
                 if (!matched) {
@@ -1069,4 +1136,3 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 document.querySelectorAll('.moduleElement').forEach(el => emulateMouseEvents(el));
-

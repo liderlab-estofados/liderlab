@@ -1036,7 +1036,7 @@ class SofaDesigner {
         try {
             // ── Canvas da imagem principal ──────────────────────────────────────
             const renderCanvas = document.createElement('canvas');
-            const scale = 5;
+            const scale = 2;
             renderCanvas.width = capWidth * scale;
             renderCanvas.height = capHeight * scale;
             const ctx = renderCanvas.getContext('2d');
@@ -1075,7 +1075,7 @@ class SofaDesigner {
                     img.onerror = () => { console.warn('Falha ao carregar imagem:', moduleData.image); resolve(); };
                 });
 
-                ctx.fillStyle = 'rgba(102, 102, 102, 0)';
+                ctx.fillStyle = 'rgba(255, 248, 248, 0)';
                 ctx.font = 'bold 12px Arial';
                 ctx.fillText(`${moduleData.largura}×${moduleData.profundidade}mm`, relX + 5, relY + 15);
                 ctx.restore();
@@ -1141,7 +1141,7 @@ class SofaDesigner {
 
             // ── Imagem principal ────────────────────────────────────────────────
             const imgMaxW = contentW;
-            const imgMaxH = 100; // máx 100mm de altura para a imagem
+            const imgMaxH = 75; // máx 100mm de altura para a imagem
             const ratio = Math.min(imgMaxW / capWidth, imgMaxH / capHeight);
             const imgW = capWidth * ratio;
             const imgH = capHeight * ratio;
@@ -1235,10 +1235,10 @@ class SofaDesigner {
                 }
 
                 // Número do módulo (sobreposto ao thumb, canto superior esquerdo)
-                pdf.setFontSize(7);
-                pdf.setTextColor(255, 255, 255);
-                pdf.setFont('helvetica', 'bold');
-                pdf.text(String(modulo || ''), thumbX + 1, thumbY + 4.5);
+                // pdf.setFontSize(7);
+                // pdf.setTextColor(255, 255, 255, 0);
+                // pdf.setFont('helvetica', 'bold');
+                // pdf.text(String(modulo || ''), thumbX + 1, thumbY + 4.5);
 
                 // Dimensões ao lado do thumb
                 pdf.setFontSize(8);

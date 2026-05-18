@@ -418,7 +418,7 @@ body {
     overflow: auto;
     position: relative;
     touch-action: none;
-    border-right: 1px solid #dee2e6;
+    border-right: 8px solid #dee2e6;
 }
 
 .canvas-workspace {
@@ -637,7 +637,14 @@ body {
 
 /* Scrollbar Styling */
 .overflow-auto::-webkit-scrollbar {
-    width: 6px;
+    width: 8px;
+    height: 8px;
+}
+
+/* Firefox */
+.overflow-auto {
+    scrollbar-width: 8px;
+    scrollbar-color: #adb5bd var(--light-color);
 }
 
 .overflow-auto::-webkit-scrollbar-track {
@@ -646,12 +653,13 @@ body {
 
 .overflow-auto::-webkit-scrollbar-thumb {
     background: #adb5bd;
-    border-radius: 3px;
+    border-radius: 8px;
 }
 
 .overflow-auto::-webkit-scrollbar-thumb:hover {
     background: #6c757d;
 }
+
 
 /* Drag and Drop Styles */
 .drag-over {

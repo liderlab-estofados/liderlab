@@ -460,7 +460,7 @@ body {
     user-select: none;
 }
 
-.placed-module:hover {
+/* .placed-module:hover {
     box-shadow: 0 0 0 2px var(--accent-color);
 }
 
@@ -474,7 +474,7 @@ body {
 
 .placed-module.snapping {
     box-shadow: 0 0 0 0px var(--snap-color) !important;
-}
+} */
 
 .placed-module img {
     width: 100%;
@@ -806,7 +806,7 @@ body {
 /* Dimension overlay preserved */
 #dimensionOverlay line {
     stroke: #555;
-    stroke-width: 1.4px;
+    stroke-width: 1.0px;
     shape-rendering: crispEdges;
 }
 
@@ -830,6 +830,10 @@ body {
     transition: opacity 0.2s ease;
     opacity: 1;
 }
+
+/* #dimensionOverlay .module-dimension-line {
+    stroke: #555;
+} */
 
 /* Vertical Toolbar Styles */
 .canvas-wrapper {

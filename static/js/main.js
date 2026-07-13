@@ -884,7 +884,7 @@ class SofaDesigner {
 
             // criar setas (markers)
             const defs = document.createElementNS(svgNS, 'defs');
-            const createMarker = (id, refX, refY, pathD) => {
+            const createMarker = (id, refX, refY, pathD, fill = 'red') => {
                 const marker = document.createElementNS(svgNS, 'marker');
                 marker.setAttribute('id', id);
                 marker.setAttribute('markerWidth', '8');
@@ -895,7 +895,7 @@ class SofaDesigner {
                 marker.setAttribute('markerUnits', 'strokeWidth');
                 const path = document.createElementNS(svgNS, 'path');
                 path.setAttribute('d', pathD);
-                path.setAttribute('fill', 'red');
+                path.setAttribute('fill', fill);
                 marker.appendChild(path);
                 return marker;
             };
@@ -903,74 +903,141 @@ class SofaDesigner {
             defs.appendChild(createMarker('arrow-end-x', 8, 4, 'M0,0 L8,4 L0,8 Z'));
             defs.appendChild(createMarker('arrow-start-y', 0, 4, 'M8,0 L0,4 L8,8 Z'));
             defs.appendChild(createMarker('arrow-end-y', 8, 4, 'M0,0 L8,4 L0,8 Z'));
+            defs.appendChild(createMarker('arrow-start-x-mod', 0, 4, 'M8,0 L0,4 L8,8 Z', '#555'));
+            defs.appendChild(createMarker('arrow-end-x-mod', 8, 4, 'M0,0 L8,4 L0,8 Z', '#555'));
+            defs.appendChild(createMarker('arrow-start-y-mod', 0, 4, 'M8,0 L0,4 L8,8 Z', '#555'));
+            defs.appendChild(createMarker('arrow-end-y-mod', 8, 4, 'M0,0 L8,4 L0,8 Z', '#555'));
             svg.appendChild(defs);
 
-            // cálculo das cotas
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            modules.forEach(m => {
+            const ADJ_TOLERANCE = 20;
+            const moduleOffset = 25;
+            const totalOffset = 45;
+            const pxToCm = 0.5;
+
+            const appendCota = (x1, y1, x2, y2, label, opts = {}) => {
+                const color = opts.color || '#555';
+                const strokeWidth = opts.strokeWidth || '1.5';
+                const isHorizontal = Math.abs(x2 - x1) >= Math.abs(y2 - y1);
+                const markerPrefix = opts.total ? '' : '-mod';
+                const markerAxis = isHorizontal ? 'x' : 'y';
+
+                const line = document.createElementNS(svgNS, 'line');
+                line.setAttribute('x1', x1);
+                line.setAttribute('y1', y1);
+                line.setAttribute('x2', x2);
+                line.setAttribute('y2', y2);
+                line.setAttribute('stroke', color);
+                line.setAttribute('stroke-width', strokeWidth);
+                line.setAttribute('marker-start', `url(#arrow-start-${markerAxis}${markerPrefix})`);
+                line.setAttribute('marker-end', `url(#arrow-end-${markerAxis}${markerPrefix})`);
+                if (opts.cssClass) line.setAttribute('class', opts.cssClass);
+                svg.appendChild(line);
+
+                const text = document.createElementNS(svgNS, 'text');
+                text.textContent = label;
+                text.setAttribute('fill', color);
+                text.setAttribute('font-size', opts.fontSize || '12');
+                text.setAttribute('font-family', 'sans-serif');
+                text.setAttribute('text-anchor', 'middle');
+                if (opts.cssClass) text.setAttribute('class', opts.cssClass);
+
+                if (isHorizontal) {
+                    text.setAttribute('x', (x1 + x2) / 2);
+                    text.setAttribute('y', y1 + (opts.textBelow === false ? -10 : 10));
+                } else {
+                    const tx = x1 + (opts.labelSide === 'left' ? -10 : 10);
+                    const ty = (y1 + y2) / 2;
+                    text.setAttribute('x', tx);
+                    text.setAttribute('y', ty);
+                    text.setAttribute('transform', `rotate(-90 ${tx} ${ty})`);
+                }
+                svg.appendChild(text);
+            };
+
+            const verticalOverlap = (a, b) =>
+                a.top < b.bottom - ADJ_TOLERANCE && a.bottom > b.top + ADJ_TOLERANCE;
+            const horizontalOverlap = (a, b) =>
+                a.left < b.right - ADJ_TOLERANCE && a.right > b.left + ADJ_TOLERANCE;
+
+            const hasNeighborRight = (rect, all) =>
+                all.some(o => o !== rect && Math.abs(o.left - rect.right) <= ADJ_TOLERANCE && verticalOverlap(rect, o));
+            const hasNeighborLeft = (rect, all) =>
+                all.some(o => o !== rect && Math.abs(o.right - rect.left) <= ADJ_TOLERANCE && verticalOverlap(rect, o));
+            const hasNeighborBelow = (rect, all) =>
+                all.some(o => o !== rect && Math.abs(o.top - rect.bottom) <= ADJ_TOLERANCE && horizontalOverlap(rect, o));
+            const hasNeighborAbove = (rect, all) =>
+                all.some(o => o !== rect && Math.abs(o.bottom - rect.top) <= ADJ_TOLERANCE && horizontalOverlap(rect, o));
+
+            const moduleRects = Array.from(modules).map(m => {
                 const left = parseInt(m.style.left) || 0;
                 const top = parseInt(m.style.top) || 0;
                 const width = parseInt(m.style.width) || m.offsetWidth;
                 const height = parseInt(m.style.height) || m.offsetHeight;
-                minX = Math.min(minX, left);
-                minY = Math.min(minY, top);
-                maxX = Math.max(maxX, left + width);
-                maxY = Math.max(maxY, top + height);
+                let moduleData = {};
+                try { moduleData = JSON.parse(m.dataset.moduleData || '{}'); } catch (_) { /* ignore */ }
+                const widthCm = moduleData.largura
+                    ? Math.round(moduleData.largura / 10)
+                    : Math.round(width * pxToCm);
+                const heightCm = moduleData.profundidade
+                    ? Math.round(moduleData.profundidade / 10)
+                    : Math.round(height * pxToCm);
+                return { left, top, right: left + width, bottom: top + height, widthCm, heightCm };
             });
 
-            const offset = 25;
-            const pxToCm = 0.5;
+            // cotas individuais por módulo (ocultas nas bordas compartilhadas)
+            moduleRects.forEach(rect => {
+                if (!hasNeighborBelow(rect, moduleRects)) {
+                    const y = rect.bottom + moduleOffset;
+                    appendCota(rect.left, y, rect.right, y, `${rect.widthCm} cm`, {
+                        cssClass: 'dimension-line module-dimension-line'
+                    });
+                } else if (!hasNeighborAbove(rect, moduleRects)) {
+                    const y = rect.top - moduleOffset;
+                    appendCota(rect.left, y, rect.right, y, `${rect.widthCm} cm`, {
+                        cssClass: 'dimension-line module-dimension-line',
+                        textBelow: false
+                    });
+                }
+
+                if (!hasNeighborRight(rect, moduleRects)) {
+                    const x = rect.right + moduleOffset;
+                    appendCota(x, rect.top, x, rect.bottom, `${rect.heightCm} cm`, {
+                        cssClass: 'dimension-line module-dimension-line'
+                    });
+                } else if (!hasNeighborLeft(rect, moduleRects)) {
+                    const x = rect.left - moduleOffset;
+                    appendCota(x, rect.top, x, rect.bottom, `${rect.heightCm} cm`, {
+                        cssClass: 'dimension-line module-dimension-line',
+                        labelSide: 'left'
+                    });
+                }
+            });
+
+            // cálculo das cotas totais (contorno externo)
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            moduleRects.forEach(rect => {
+                minX = Math.min(minX, rect.left);
+                minY = Math.min(minY, rect.top);
+                maxX = Math.max(maxX, rect.right);
+                maxY = Math.max(maxY, rect.bottom);
+            });
+
             const widthCm = Math.round((maxX - minX) * pxToCm);
             const heightCm = Math.round((maxY - minY) * pxToCm);
 
-            // linha horizontal
-            const lineX = document.createElementNS(svgNS, 'line');
-            lineX.setAttribute('x1', minX);
-            lineX.setAttribute('y1', maxY + offset);
-            lineX.setAttribute('x2', maxX);
-            lineX.setAttribute('y2', maxY + offset);
-            lineX.setAttribute('stroke', 'red');
-            lineX.setAttribute('stroke-width', '2');
-            lineX.setAttribute('marker-start', 'url(#arrow-start-x)');
-            lineX.setAttribute('marker-end', 'url(#arrow-end-x)');
-            svg.appendChild(lineX);
+            appendCota(minX, maxY + totalOffset, maxX, maxY + totalOffset, `${widthCm} cm`, {
+                color: 'red',
+                strokeWidth: '2',
+                fontSize: '14',
+                total: true
+            });
 
-            // texto horizontal
-            const textX = document.createElementNS(svgNS, 'text');
-            textX.textContent = `${widthCm} cm`;
-            textX.setAttribute('x', (minX + maxX) / 2);
-            textX.setAttribute('y', maxY + offset + 15);
-            textX.setAttribute('text-anchor', 'middle');
-            textX.setAttribute('fill', 'red');
-            textX.setAttribute('font-size', '14');
-            textX.setAttribute('font-family', 'sans-serif');
-            svg.appendChild(textX);
-
-            // linha vertical
-            const lineY = document.createElementNS(svgNS, 'line');
-            lineY.setAttribute('x1', maxX + offset);
-            lineY.setAttribute('y1', minY);
-            lineY.setAttribute('x2', maxX + offset);
-            lineY.setAttribute('y2', maxY);
-            lineY.setAttribute('stroke', 'red');
-            lineY.setAttribute('stroke-width', '2');
-            lineY.setAttribute('marker-start', 'url(#arrow-start-y)');
-            lineY.setAttribute('marker-end', 'url(#arrow-end-y)');
-            svg.appendChild(lineY);
-
-            // texto vertical
-            const textY = document.createElementNS(svgNS, 'text');
-            textY.textContent = `${heightCm} cm`;
-            const textYx = maxX + offset + 15;
-            const textYy = (minY + maxY) / 2;
-            textY.setAttribute('x', textYx);
-            textY.setAttribute('y', textYy);
-            textY.setAttribute('transform', `rotate(-90 ${textYx} ${textYy})`);
-            textY.setAttribute('text-anchor', 'middle');
-            textY.setAttribute('fill', 'red');
-            textY.setAttribute('font-size', '14');
-            textY.setAttribute('font-family', 'sans-serif');
-            svg.appendChild(textY);
+            appendCota(maxX + totalOffset, minY, maxX + totalOffset, maxY, `${heightCm} cm`, {
+                color: 'red',
+                strokeWidth: '2',
+                fontSize: '14',
+                total: true
+            });
 
             canvas.appendChild(svg);
         } catch (err) {

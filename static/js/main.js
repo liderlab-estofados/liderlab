@@ -1020,44 +1020,48 @@ class SofaDesigner {
         });
 
         const cotas = [];
+        const singleModule = moduleRects.length === 1;
 
-        moduleRects.forEach(rect => {
-            if (!hasNeighborBelow(rect, moduleRects)) {
-                cotas.push({
-                    x1: rect.left, y1: rect.bottom + moduleOffset,
-                    x2: rect.right, y2: rect.bottom + moduleOffset,
-                    label: `${rect.widthCm} cm`,
-                    color: '#555', strokeWidth: 1.5, fontSize: 12,
-                    textBelow: true, total: false
-                });
-            } else if (!hasNeighborAbove(rect, moduleRects)) {
-                cotas.push({
-                    x1: rect.left, y1: rect.top - moduleOffset,
-                    x2: rect.right, y2: rect.top - moduleOffset,
-                    label: `${rect.widthCm} cm`,
-                    color: '#555', strokeWidth: 1.5, fontSize: 12,
-                    textBelow: false, total: false
-                });
-            }
+        // Cotas individuais só com 2+ módulos (com 1 seriam iguais à cota total)
+        if (!singleModule) {
+            moduleRects.forEach(rect => {
+                if (!hasNeighborBelow(rect, moduleRects)) {
+                    cotas.push({
+                        x1: rect.left, y1: rect.bottom + moduleOffset,
+                        x2: rect.right, y2: rect.bottom + moduleOffset,
+                        label: `${rect.widthCm} cm`,
+                        color: '#555', strokeWidth: 1.5, fontSize: 12,
+                        textBelow: true, total: false
+                    });
+                } else if (!hasNeighborAbove(rect, moduleRects)) {
+                    cotas.push({
+                        x1: rect.left, y1: rect.top - moduleOffset,
+                        x2: rect.right, y2: rect.top - moduleOffset,
+                        label: `${rect.widthCm} cm`,
+                        color: '#555', strokeWidth: 1.5, fontSize: 12,
+                        textBelow: false, total: false
+                    });
+                }
 
-            if (!hasNeighborRight(rect, moduleRects)) {
-                cotas.push({
-                    x1: rect.right + moduleOffset, y1: rect.top,
-                    x2: rect.right + moduleOffset, y2: rect.bottom,
-                    label: `${rect.heightCm} cm`,
-                    color: '#555', strokeWidth: 1.5, fontSize: 12,
-                    labelSide: 'right', total: false
-                });
-            } else if (!hasNeighborLeft(rect, moduleRects)) {
-                cotas.push({
-                    x1: rect.left - moduleOffset, y1: rect.top,
-                    x2: rect.left - moduleOffset, y2: rect.bottom,
-                    label: `${rect.heightCm} cm`,
-                    color: '#555', strokeWidth: 1.5, fontSize: 12,
-                    labelSide: 'left', total: false
-                });
-            }
-        });
+                if (!hasNeighborRight(rect, moduleRects)) {
+                    cotas.push({
+                        x1: rect.right + moduleOffset, y1: rect.top,
+                        x2: rect.right + moduleOffset, y2: rect.bottom,
+                        label: `${rect.heightCm} cm`,
+                        color: '#555', strokeWidth: 1.5, fontSize: 12,
+                        labelSide: 'right', total: false
+                    });
+                } else if (!hasNeighborLeft(rect, moduleRects)) {
+                    cotas.push({
+                        x1: rect.left - moduleOffset, y1: rect.top,
+                        x2: rect.left - moduleOffset, y2: rect.bottom,
+                        label: `${rect.heightCm} cm`,
+                        color: '#555', strokeWidth: 1.5, fontSize: 12,
+                        labelSide: 'left', total: false
+                    });
+                }
+            });
+        }
 
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         moduleRects.forEach(rect => {

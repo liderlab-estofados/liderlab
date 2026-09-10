@@ -1188,10 +1188,10 @@ class SofaDesigner {
         // Área dos módulos + padding para cotas externas
         const contentWpx = maxX - minX;
         const contentHpx = maxY - minY;
-        const capWidth = contentWpx + padLeft + padRight;
-        const capHeight = contentHpx + padTop + padBottom;
-        const originX = minX - padLeft;
-        const originY = minY - padTop;
+        const capWidth = contentWpx //+ padLeft + padRight;
+        const capHeight = contentHpx //+ padTop + padBottom;
+        const originX = minX// - padLeft;
+        const originY = minY// - padTop;
 
         try {
             // ── Canvas da imagem principal ──────────────────────────────────────
@@ -1237,7 +1237,7 @@ class SofaDesigner {
             }
 
             // Cotas iguais às do canvas (individuais + totais)
-            this.drawDimensionAnnotationsOnCtx(ctx, cotas, originX, originY);
+            //this.drawDimensionAnnotationsOnCtx(ctx, cotas, originX, originY);
 
             const imgData = renderCanvas.toDataURL('image/png');
 

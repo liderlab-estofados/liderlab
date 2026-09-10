@@ -909,44 +909,42 @@ class SofaDesigner {
             defs.appendChild(createMarker('arrow-end-y-mod', 8, 4, 'M0,0 L8,4 L0,8 Z', '#555'));
             svg.appendChild(defs);
 
-            const ADJ_TOLERANCE = 20;
-            const moduleOffset = 25;
-            const totalOffset = 45;
-            const pxToCm = 0.5;
+            const dims = this.computeDimensionAnnotations(modules);
+            const { cotas } = dims;
 
-            const appendCota = (x1, y1, x2, y2, label, opts = {}) => {
-                const color = opts.color || '#555';
-                const strokeWidth = opts.strokeWidth || '1.5';
-                const isHorizontal = Math.abs(x2 - x1) >= Math.abs(y2 - y1);
-                const markerPrefix = opts.total ? '' : '-mod';
+            const appendCota = (c) => {
+                const color = c.color || '#555';
+                const strokeWidth = String(c.strokeWidth || 1.5);
+                const isHorizontal = Math.abs(c.x2 - c.x1) >= Math.abs(c.y2 - c.y1);
+                const markerPrefix = c.total ? '' : '-mod';
                 const markerAxis = isHorizontal ? 'x' : 'y';
 
                 const line = document.createElementNS(svgNS, 'line');
-                line.setAttribute('x1', x1);
-                line.setAttribute('y1', y1);
-                line.setAttribute('x2', x2);
-                line.setAttribute('y2', y2);
+                line.setAttribute('x1', c.x1);
+                line.setAttribute('y1', c.y1);
+                line.setAttribute('x2', c.x2);
+                line.setAttribute('y2', c.y2);
                 line.setAttribute('stroke', color);
                 line.setAttribute('stroke-width', strokeWidth);
                 line.setAttribute('marker-start', `url(#arrow-start-${markerAxis}${markerPrefix})`);
                 line.setAttribute('marker-end', `url(#arrow-end-${markerAxis}${markerPrefix})`);
-                if (opts.cssClass) line.setAttribute('class', opts.cssClass);
+                if (!c.total) line.setAttribute('class', 'dimension-line module-dimension-line');
                 svg.appendChild(line);
 
                 const text = document.createElementNS(svgNS, 'text');
-                text.textContent = label;
+                text.textContent = c.label;
                 text.setAttribute('fill', color);
-                text.setAttribute('font-size', opts.fontSize || '12');
+                text.setAttribute('font-size', String(c.fontSize || 12));
                 text.setAttribute('font-family', 'sans-serif');
                 text.setAttribute('text-anchor', 'middle');
-                if (opts.cssClass) text.setAttribute('class', opts.cssClass);
+                if (!c.total) text.setAttribute('class', 'dimension-line module-dimension-line');
 
                 if (isHorizontal) {
-                    text.setAttribute('x', (x1 + x2) / 2);
-                    text.setAttribute('y', y1 + (opts.textBelow === false ? -10 : 10));
+                    text.setAttribute('x', (c.x1 + c.x2) / 2);
+                    text.setAttribute('y', c.y1 + (c.textBelow === false ? -10 : 10));
                 } else {
-                    const tx = x1 + (opts.labelSide === 'left' ? -10 : 10);
-                    const ty = (y1 + y2) / 2;
+                    const tx = c.x1 + (c.labelSide === 'left' ? -10 : 10);
+                    const ty = (c.y1 + c.y2) / 2;
                     text.setAttribute('x', tx);
                     text.setAttribute('y', ty);
                     text.setAttribute('transform', `rotate(-90 ${tx} ${ty})`);
@@ -954,90 +952,7 @@ class SofaDesigner {
                 svg.appendChild(text);
             };
 
-            const verticalOverlap = (a, b) =>
-                a.top < b.bottom - ADJ_TOLERANCE && a.bottom > b.top + ADJ_TOLERANCE;
-            const horizontalOverlap = (a, b) =>
-                a.left < b.right - ADJ_TOLERANCE && a.right > b.left + ADJ_TOLERANCE;
-
-            const hasNeighborRight = (rect, all) =>
-                all.some(o => o !== rect && Math.abs(o.left - rect.right) <= ADJ_TOLERANCE && verticalOverlap(rect, o));
-            const hasNeighborLeft = (rect, all) =>
-                all.some(o => o !== rect && Math.abs(o.right - rect.left) <= ADJ_TOLERANCE && verticalOverlap(rect, o));
-            const hasNeighborBelow = (rect, all) =>
-                all.some(o => o !== rect && Math.abs(o.top - rect.bottom) <= ADJ_TOLERANCE && horizontalOverlap(rect, o));
-            const hasNeighborAbove = (rect, all) =>
-                all.some(o => o !== rect && Math.abs(o.bottom - rect.top) <= ADJ_TOLERANCE && horizontalOverlap(rect, o));
-
-            const moduleRects = Array.from(modules).map(m => {
-                const left = parseInt(m.style.left) || 0;
-                const top = parseInt(m.style.top) || 0;
-                const width = parseInt(m.style.width) || m.offsetWidth;
-                const height = parseInt(m.style.height) || m.offsetHeight;
-                let moduleData = {};
-                try { moduleData = JSON.parse(m.dataset.moduleData || '{}'); } catch (_) { /* ignore */ }
-                const widthCm = moduleData.largura
-                    ? Math.round(moduleData.largura / 10)
-                    : Math.round(width * pxToCm);
-                const heightCm = moduleData.profundidade
-                    ? Math.round(moduleData.profundidade / 10)
-                    : Math.round(height * pxToCm);
-                return { left, top, right: left + width, bottom: top + height, widthCm, heightCm };
-            });
-
-            // cotas individuais por módulo (ocultas nas bordas compartilhadas)
-            moduleRects.forEach(rect => {
-                if (!hasNeighborBelow(rect, moduleRects)) {
-                    const y = rect.bottom + moduleOffset;
-                    appendCota(rect.left, y, rect.right, y, `${rect.widthCm} cm`, {
-                        cssClass: 'dimension-line module-dimension-line'
-                    });
-                } else if (!hasNeighborAbove(rect, moduleRects)) {
-                    const y = rect.top - moduleOffset;
-                    appendCota(rect.left, y, rect.right, y, `${rect.widthCm} cm`, {
-                        cssClass: 'dimension-line module-dimension-line',
-                        textBelow: false
-                    });
-                }
-
-                if (!hasNeighborRight(rect, moduleRects)) {
-                    const x = rect.right + moduleOffset;
-                    appendCota(x, rect.top, x, rect.bottom, `${rect.heightCm} cm`, {
-                        cssClass: 'dimension-line module-dimension-line'
-                    });
-                } else if (!hasNeighborLeft(rect, moduleRects)) {
-                    const x = rect.left - moduleOffset;
-                    appendCota(x, rect.top, x, rect.bottom, `${rect.heightCm} cm`, {
-                        cssClass: 'dimension-line module-dimension-line',
-                        labelSide: 'left'
-                    });
-                }
-            });
-
-            // cálculo das cotas totais (contorno externo)
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            moduleRects.forEach(rect => {
-                minX = Math.min(minX, rect.left);
-                minY = Math.min(minY, rect.top);
-                maxX = Math.max(maxX, rect.right);
-                maxY = Math.max(maxY, rect.bottom);
-            });
-
-            const widthCm = Math.round((maxX - minX) * pxToCm);
-            const heightCm = Math.round((maxY - minY) * pxToCm);
-
-            appendCota(minX, maxY + totalOffset, maxX, maxY + totalOffset, `${widthCm} cm`, {
-                color: 'red',
-                strokeWidth: '2',
-                fontSize: '14',
-                total: true
-            });
-
-            appendCota(maxX + totalOffset, minY, maxX + totalOffset, maxY, `${heightCm} cm`, {
-                color: 'red',
-                strokeWidth: '2',
-                fontSize: '14',
-                total: true
-            });
+            cotas.forEach(appendCota);
 
             canvas.appendChild(svg);
         } catch (err) {
@@ -1064,6 +979,184 @@ class SofaDesigner {
 
     }
 
+    /**
+     * Calcula cotas individuais e totais (mesma lógica do canvas e do PDF).
+     * Retorna retângulos, lista de cotas e offsets usados.
+     */
+    computeDimensionAnnotations(moduleElements) {
+        const ADJ_TOLERANCE = 20;
+        const moduleOffset = 25;
+        const totalOffset = 45;
+        const pxToCm = 0.5;
+
+        const verticalOverlap = (a, b) =>
+            a.top < b.bottom - ADJ_TOLERANCE && a.bottom > b.top + ADJ_TOLERANCE;
+        const horizontalOverlap = (a, b) =>
+            a.left < b.right - ADJ_TOLERANCE && a.right > b.left + ADJ_TOLERANCE;
+
+        const hasNeighborRight = (rect, all) =>
+            all.some(o => o !== rect && Math.abs(o.left - rect.right) <= ADJ_TOLERANCE && verticalOverlap(rect, o));
+        const hasNeighborLeft = (rect, all) =>
+            all.some(o => o !== rect && Math.abs(o.right - rect.left) <= ADJ_TOLERANCE && verticalOverlap(rect, o));
+        const hasNeighborBelow = (rect, all) =>
+            all.some(o => o !== rect && Math.abs(o.top - rect.bottom) <= ADJ_TOLERANCE && horizontalOverlap(rect, o));
+        const hasNeighborAbove = (rect, all) =>
+            all.some(o => o !== rect && Math.abs(o.bottom - rect.top) <= ADJ_TOLERANCE && horizontalOverlap(rect, o));
+
+        const moduleRects = Array.from(moduleElements).map(m => {
+            const left = parseInt(m.style.left) || 0;
+            const top = parseInt(m.style.top) || 0;
+            const width = parseInt(m.style.width) || m.offsetWidth;
+            const height = parseInt(m.style.height) || m.offsetHeight;
+            let moduleData = {};
+            try { moduleData = JSON.parse(m.dataset.moduleData || '{}'); } catch (_) { /* ignore */ }
+            const widthCm = moduleData.largura
+                ? Math.round(moduleData.largura / 10)
+                : Math.round(width * pxToCm);
+            const heightCm = moduleData.profundidade
+                ? Math.round(moduleData.profundidade / 10)
+                : Math.round(height * pxToCm);
+            return { left, top, right: left + width, bottom: top + height, widthCm, heightCm };
+        });
+
+        const cotas = [];
+
+        moduleRects.forEach(rect => {
+            if (!hasNeighborBelow(rect, moduleRects)) {
+                cotas.push({
+                    x1: rect.left, y1: rect.bottom + moduleOffset,
+                    x2: rect.right, y2: rect.bottom + moduleOffset,
+                    label: `${rect.widthCm} cm`,
+                    color: '#555', strokeWidth: 1.5, fontSize: 12,
+                    textBelow: true, total: false
+                });
+            } else if (!hasNeighborAbove(rect, moduleRects)) {
+                cotas.push({
+                    x1: rect.left, y1: rect.top - moduleOffset,
+                    x2: rect.right, y2: rect.top - moduleOffset,
+                    label: `${rect.widthCm} cm`,
+                    color: '#555', strokeWidth: 1.5, fontSize: 12,
+                    textBelow: false, total: false
+                });
+            }
+
+            if (!hasNeighborRight(rect, moduleRects)) {
+                cotas.push({
+                    x1: rect.right + moduleOffset, y1: rect.top,
+                    x2: rect.right + moduleOffset, y2: rect.bottom,
+                    label: `${rect.heightCm} cm`,
+                    color: '#555', strokeWidth: 1.5, fontSize: 12,
+                    labelSide: 'right', total: false
+                });
+            } else if (!hasNeighborLeft(rect, moduleRects)) {
+                cotas.push({
+                    x1: rect.left - moduleOffset, y1: rect.top,
+                    x2: rect.left - moduleOffset, y2: rect.bottom,
+                    label: `${rect.heightCm} cm`,
+                    color: '#555', strokeWidth: 1.5, fontSize: 12,
+                    labelSide: 'left', total: false
+                });
+            }
+        });
+
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        moduleRects.forEach(rect => {
+            minX = Math.min(minX, rect.left);
+            minY = Math.min(minY, rect.top);
+            maxX = Math.max(maxX, rect.right);
+            maxY = Math.max(maxY, rect.bottom);
+        });
+
+        const widthCm = Math.round((maxX - minX) * pxToCm);
+        const heightCm = Math.round((maxY - minY) * pxToCm);
+
+        cotas.push({
+            x1: minX, y1: maxY + totalOffset,
+            x2: maxX, y2: maxY + totalOffset,
+            label: `${widthCm} cm`,
+            color: 'red', strokeWidth: 2, fontSize: 14,
+            textBelow: true, total: true
+        });
+
+        cotas.push({
+            x1: maxX + totalOffset, y1: minY,
+            x2: maxX + totalOffset, y2: maxY,
+            label: `${heightCm} cm`,
+            color: 'red', strokeWidth: 2, fontSize: 14,
+            labelSide: 'right', total: true
+        });
+
+        return {
+            moduleRects,
+            cotas,
+            minX, minY, maxX, maxY,
+            widthCm, heightCm,
+            moduleOffset, totalOffset,
+            // espaço extra para texto/setas fora do bounding box
+            padLeft: moduleOffset + 18,
+            padTop: moduleOffset + 18,
+            padRight: totalOffset + 22,
+            padBottom: totalOffset + 22
+        };
+    }
+
+    /** Desenha setas e cotas no contexto 2D (PDF / exportação). */
+    drawDimensionAnnotationsOnCtx(ctx, cotas, originX = 0, originY = 0) {
+        const drawArrow = (fromX, fromY, toX, toY, color, size = 6) => {
+            const angle = Math.atan2(toY - fromY, toX - fromX);
+            ctx.beginPath();
+            ctx.moveTo(toX, toY);
+            ctx.lineTo(
+                toX - size * Math.cos(angle - Math.PI / 6),
+                toY - size * Math.sin(angle - Math.PI / 6)
+            );
+            ctx.lineTo(
+                toX - size * Math.cos(angle + Math.PI / 6),
+                toY - size * Math.sin(angle + Math.PI / 6)
+            );
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+        };
+
+        cotas.forEach(c => {
+            const x1 = c.x1 - originX;
+            const y1 = c.y1 - originY;
+            const x2 = c.x2 - originX;
+            const y2 = c.y2 - originY;
+            const isHorizontal = Math.abs(x2 - x1) >= Math.abs(y2 - y1);
+
+            ctx.strokeStyle = c.color;
+            ctx.fillStyle = c.color;
+            ctx.lineWidth = c.strokeWidth;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+
+            drawArrow(x2, y2, x1, y1, c.color);
+            drawArrow(x1, y1, x2, y2, c.color);
+
+            ctx.font = `${c.fontSize || 12}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            if (isHorizontal) {
+                const tx = (x1 + x2) / 2;
+                const ty = y1 + (c.textBelow === false ? -10 : 10);
+                ctx.fillText(c.label, tx, ty);
+            } else {
+                const tx = x1 + (c.labelSide === 'left' ? -10 : 10);
+                const ty = (y1 + y2) / 2;
+                ctx.save();
+                ctx.translate(tx, ty);
+                ctx.rotate(-Math.PI / 2);
+                ctx.fillText(c.label, 0, 0);
+                ctx.restore();
+            }
+        });
+    }
+
     /////////////////////////////////////////////////////////////////////////////////////
     async exportAsPDF() {
         const canvasEl = document.getElementById('canvasSheet');
@@ -1081,24 +1174,20 @@ class SofaDesigner {
         this.zoomReset();
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        modules.forEach(m => {
-            const x = parseInt(m.style.left) || 0;
-            const y = parseInt(m.style.top) || 0;
-            const moduleData = JSON.parse(m.dataset.moduleData);
-            const rotation = parseInt(m.dataset.rotation) || 0;
-            const pixelsPerMM = 0.2;
-            let width = Math.round(moduleData.largura * pixelsPerMM);
-            let height = Math.round(moduleData.profundidade * pixelsPerMM);
-            if (rotation === 90 || rotation === 270) [width, height] = [height, width];
-            minX = Math.min(minX, x);
-            minY = Math.min(minY, y);
-            maxX = Math.max(maxX, x + width);
-            maxY = Math.max(maxY, y + height);
-        });
+        const dims = this.computeDimensionAnnotations(modules);
+        const {
+            minX, minY, maxX, maxY,
+            padLeft, padTop, padRight, padBottom,
+            cotas
+        } = dims;
 
-        const capWidth = maxX - minX;
-        const capHeight = maxY - minY;
+        // Área dos módulos + padding para cotas externas
+        const contentWpx = maxX - minX;
+        const contentHpx = maxY - minY;
+        const capWidth = contentWpx + padLeft + padRight;
+        const capHeight = contentHpx + padTop + padBottom;
+        const originX = minX - padLeft;
+        const originY = minY - padTop;
 
         try {
             // ── Canvas da imagem principal ──────────────────────────────────────
@@ -1124,8 +1213,8 @@ class SofaDesigner {
                 const height = Math.round(moduleData.profundidade * pixelsPerMM);
                 let centerW = width, centerH = height;
                 if (rotationNorm === 90 || rotationNorm === 270) { centerW = height; centerH = width; }
-                const relX = x - minX;
-                const relY = y - minY;
+                const relX = x - originX;
+                const relY = y - originY;
 
                 const img = new Image();
                 img.src = moduleData.image;
@@ -1141,12 +1230,10 @@ class SofaDesigner {
                     };
                     img.onerror = () => { console.warn('Falha ao carregar imagem:', moduleData.image); resolve(); };
                 });
-
-                ctx.fillStyle = 'rgba(255, 248, 248, 0)';
-                ctx.font = 'bold 12px Arial';
-                ctx.fillText(`${moduleData.largura}×${moduleData.profundidade}mm`, relX + 5, relY + 15);
-                ctx.restore();
             }
+
+            // Cotas iguais às do canvas (individuais + totais)
+            this.drawDimensionAnnotationsOnCtx(ctx, cotas, originX, originY);
 
             const imgData = renderCanvas.toDataURL('image/png');
 
